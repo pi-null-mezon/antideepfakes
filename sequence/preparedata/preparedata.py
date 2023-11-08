@@ -63,25 +63,15 @@ procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/manipulated_se
 procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/manipulated_sequences/NeuralTextures/c23/videos", f"{target_location}/{dataset_name}/fake", True, conf))
 procs.append(spawn(f"/media/alex/Datastorage/Testdata/Video/distortion_liveness/all/live", f"{target_location}/{dataset_name}/live", True, conf))
 
-dataset_name = 'dfdc/train_part_07'
-procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/live", f"{target_location}/{dataset_name}/live", True, conf))
-procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/fake", f"{target_location}/{dataset_name}/fake", True, conf))
+for proc in procs:
+    proc.wait()
+    print(f" - process {proc.pid} finished, return code: {proc.returncode}")
+procs = list()
 
-dataset_name = 'dfdc/train_part_17'
-conf = config(dthresh=0.9, strobe=17)
-procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/live", f"{target_location}/{dataset_name}/live", True, conf))
-procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/fake", f"{target_location}/{dataset_name}/fake", True, conf))
-
-dataset_name = 'dfdc/train_part_43'
-procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/live", f"{target_location}/{dataset_name}/live", True, conf))
-procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/fake", f"{target_location}/{dataset_name}/fake", True, conf))
-
-
-'''conf = config(dthresh=0.9, strobe=17)
-for part in ['0', '1', '3', '5', '7', '11', '17', '23', '41', '43', '47']:
+for part in ['0', '1', '3', '5', '07', '11', '17', '23', '41', '43', '47']:
     dataset_name = f'dfdc/train_part_{part}'
     procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/live", f"{target_location}/{dataset_name}/live", True, conf))
-    procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/fake", f"{target_location}/{dataset_name}/fake", True, conf))'''
+    procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/fake", f"{target_location}/{dataset_name}/fake", True, conf))
 
 for proc in procs:
     proc.wait()

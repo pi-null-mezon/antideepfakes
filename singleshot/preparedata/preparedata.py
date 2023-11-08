@@ -52,14 +52,8 @@ procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/YouTube-real",
 procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/Celeb-synthesis", f"{target_location}/{dataset_name}/fake", True, conf))
 
 dataset_name = 'FaceForensics++'
-procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/original_sequences/actors", f"{target_location}/{dataset_name}/live", True, conf))
-procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/original_sequences/youtube", f"{target_location}/{dataset_name}/live", True, conf))
-procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/manipulated_sequences/DeepFakeDetection", f"{target_location}/{dataset_name}/fake", True, conf))
-procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/manipulated_sequences/Deepfakes", f"{target_location}/{dataset_name}/fake", True, conf))
-procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/manipulated_sequences/Face2Face", f"{target_location}/{dataset_name}/fake", True, conf))
-procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/manipulated_sequences/FaceShifter", f"{target_location}/{dataset_name}/fake", True, conf))
-procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/manipulated_sequences/FaceSwap", f"{target_location}/{dataset_name}/fake", True, conf))
-procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/manipulated_sequences/NeuralTextures", f"{target_location}/{dataset_name}/fake", True, conf))
+procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/original_sequences", f"{target_location}/{dataset_name}/live", True, conf))
+procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/manipulated_sequences", f"{target_location}/{dataset_name}/fake", True, conf))
 procs.append(spawn(f"/media/alex/Biosamples/Toloka/Four_live_samples", f"{target_location}/{dataset_name}/live", True, conf))
 procs.append(spawn(f"/media/alex/Datastorage/Testdata/Video/distortion_liveness/all/live", f"{target_location}/{dataset_name}/live", True, conf))
 
@@ -81,6 +75,11 @@ procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/fake", f"{targ
 procs.append(spawn("/media/alex/Datastorage/Testdata/Faces/RAW/Toloka", f"{target_location}/{dataset_name}/live", False, conf))
 procs.append(spawn("/media/alex/Datastorage/Testdata/Faces/RAW/Fullface", f"{target_location}/{dataset_name}/live", False, conf))
 procs.append(spawn("/media/alex/Datastorage/Testdata/Faces/RAW/EBS", f"{target_location}/{dataset_name}/live", False, conf))
+
+for proc in procs:
+    proc.wait()
+    print(f" - process {proc.pid} finished, return code: {proc.returncode}")
+procs = list()
 
 for part in ['0', '1', '3', '5', '11', '23', '41', '47']:
     dataset_name = f'dfdc/train_part_{part}'

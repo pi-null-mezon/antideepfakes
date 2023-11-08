@@ -99,42 +99,52 @@ class CustomDataSet(Dataset):
 class Speedometer:
     def __init__(self, gamma: float = 0.9):
         self.gamma = gamma
-        self._speed = 0
+        self._speed = None
         self.t0 = perf_counter()
 
     def reset(self):
-        self._speed = 0
+        self._speed = None
         self.t0 = perf_counter()
 
     def update(self, samples):
-        self._speed = self._speed * self.gamma + (1 - self.gamma) * samples / (perf_counter() - self.t0)
+        if self._speed is None:
+            self._speed = samples / (perf_counter() - self.t0)
+        else:
+            self._speed = self._speed * self.gamma + (1 - self.gamma) * samples / (perf_counter() - self.t0)
         self.t0 = perf_counter()
 
     def speed(self):
         return self._speed
 
 
-class Avgmeter:
-    def __init__(self):
+class Averagemeter:
+    def __init__(self, gamma: float = 0.99):
+        self.gamma = gamma
         self.val = None
-        self.avg = None
-        self.sum = None
-        self.count = None
-        self.reset()
 
     def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
+        self.val = None
 
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
+    def update(self, val):
+        if self.val is None:
+            self.val = val
+        else:
+            self.val = self.val * self.gamma + (1 - self.gamma) * val
+
+    def value(self):
+        return self.val
 
 
 def print_one_line(s):
     sys.stdout.write('\r' + s)
     sys.stdout.flush()
+
+
+def model_size_mb(model):
+    params_size = 0
+    for param in model.parameters():
+        params_size += param.nelement() * param.element_size()
+    buffers_size = 0
+    for buffer in model.buffers():
+        buffers_size += buffer.nelement() * buffer.element_size()
+    return (params_size + buffers_size) / 1024 ** 2
