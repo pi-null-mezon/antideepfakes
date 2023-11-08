@@ -56,7 +56,7 @@ print(f" - model size: {model_size_mb(model):.3f} MB")
 # Loss and optimizer
 loss_fn = nn.CrossEntropyLoss(label_smoothing=cfg.labels_smoothing)
 optimizer = optim.Adam(model.parameters(), lr=0.001)
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=2, factor=0.1, min_lr=0.00001,
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2, factor=0.1, min_lr=0.00001,
                                                        verbose=True)
 
 # ----------------------------

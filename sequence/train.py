@@ -67,7 +67,7 @@ print(f" - model size: {model_size_mb(model):.3f} MB")
 # Loss and optimizer
 loss_fn = nn.CrossEntropyLoss(label_smoothing=cfg.labels_smoothing)
 optimizer = optim.Adam(model.parameters(), lr=0.001)
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=2, factor=0.1, min_lr=0.00001,
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2, factor=0.2, min_lr=0.00001,
                                                        verbose=True)
 
 # ----------------------------
@@ -97,7 +97,8 @@ class_weights = list(1 / torch.Tensor(list(lbls_count.values())))
 samples_weights = [class_weights[lbl] for lbl in train_dataset.targets]
 sampler = torch.utils.data.WeightedRandomSampler(weights=samples_weights, num_samples=len(train_dataset),
                                                  replacement=True)
-train_dataloader = torch.utils.data.DataLoader(train_dataset, sampler=sampler, batch_size=cfg.batch_size, num_workers=8)
+train_dataloader = torch.utils.data.DataLoader(train_dataset, sampler=sampler, batch_size=cfg.batch_size,
+                                               drop_last=True, num_workers=8)
 
 alive_lbl = None
 for key in train_dataset.labels_names():
@@ -113,7 +114,8 @@ test_dataset = CustomDataSet([f"{local_path}/dfdc/train_part_17",
                              min_sequence_length=cfg.sequence_length)
 print(f"  {test_dataset.labels_names()}")
 print(f"  {dict(Counter(test_dataset.targets))}")
-test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=True, num_workers=6)
+test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=True,
+                                              drop_last=True, num_workers=6)
 
 metrics = {
     'train': {'BPCER': float('inf'), 'APCER': float('inf'), 'loss': float('inf'), 'AE': float('inf')},
@@ -153,7 +155,7 @@ def update_metrics(mode, epoch, running_loss, true_positive_live, false_positive
     if prob < metrics[mode]['AE']:
         metrics[mode]['AE'] = prob
         if mode == 'test':
-            torch.save(model, f"./weights/encoder_{cfg.model_name}@{crop_format}.pth")
+            torch.save(model, f"./weights/{cfg.backbone_name}@{crop_format}_encoder.pth")
         print(f" - Average error: {prob:.5f} - improvement")
     else:
         print(f" - Average error: {prob:.5f}")
