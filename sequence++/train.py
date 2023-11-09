@@ -30,7 +30,7 @@ cfg.num_classes = 2
 cfg.augment = True
 cfg.backbone_name = "effnet_v2_s"
 cfg.labels_smoothing = 0.1
-cfg.max_batches_per_train_epoch = -1  # -1 - use all batches
+cfg.max_batches_per_train_epoch = 512  # -1 - use all batches
 crop_format = '256x60x0.1' if cfg.crop_size[0] == 256 else '224x90x0.2'
 local_path = f"/home/alex/Fastdata/deepfakes/sequence/{crop_format}"
 
@@ -144,9 +144,9 @@ def update_metrics(mode, epoch, running_loss, roc_estimator):
         if mode == 'test':
             torch.save(model, f"./weights/++tmp_encoder_{cfg.backbone_name}@{crop_format}.pth")
             torch.save(backbone, f"./weights/++tmp_{cfg.backbone_name}@{crop_format}.pth")
-        print(f" - EER: {eer:.4f} - improvement")
+        print(f" - EER: {eer:.4f} (score: {err_s:.3f}) - improvement")
     else:
-        print(f" - EER: {eer:.4f}")
+        print(f" - EER: {eer:.4f} (score: {err_s:.3f})")
     print(f" - BPCER@0.1: {roc_estimator.estimate_bpcer(target_apcer=0.1):.4f}")
     bpcer01 = roc_estimator.estimate_bpcer(target_apcer=0.01)
     print(f" - BPCER@0.01: {bpcer01:.4f}")
@@ -292,15 +292,8 @@ def test_naive_averaging(dataloader):
             false_positive_live += (predicted[labels != alive_lbl] == alive_lbl).sum().item()
             true_negative_live += (predicted[labels != alive_lbl] != alive_lbl).sum().item()
             false_negative_live += (predicted[labels == alive_lbl] != alive_lbl).sum().item()
-
-    apcer = false_positive_live / (false_positive_live + true_negative_live + 1E-6)
-    print(f" - APCER: {apcer:.4f}")
-    bpcer = false_negative_live / (false_negative_live + true_positive_live + 1E-6)
-    print(f" - BPCER: {bpcer:.4f}")
-    prob = (bpcer + apcer) / 2
-    print(f" - AE: {prob:.4f}")
     eer, err_s = test_roc_est.estimate_eer()
-    print(f" - EER: {eer:.5f} (score: {err_s:.4f})")
+    print(f" - EER: {eer:.4f} (score: {err_s:.4f})")
     print(f" - BPCER@0.1: {test_roc_est.estimate_bpcer(target_apcer=0.1):.4f}")
     print(f" - BPCER@0.01: {test_roc_est.estimate_bpcer(target_apcer=0.01):.4f}")
     print(f" - BPCER@0.001: {test_roc_est.estimate_bpcer(target_apcer=0.001):.4f}")

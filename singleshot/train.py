@@ -123,9 +123,9 @@ def update_metrics(mode, epoch, running_loss, roc_estimator):
         metrics[mode]['EER'] = eer
         if mode == 'test':
             torch.save(model, f"./weights/tmp_{cfg.backbone_name}@{crop_format}.pth")
-        print(f" - EER: {eer:.4f} - improvement")
+        print(f" - EER: {eer:.4f} (score: {err_s:.3f}) - improvement")
     else:
-        print(f" - EER: {eer:.4f}")
+        print(f" - EER: {eer:.4f} (score: {err_s:.3f})")
     print(f" - BPCER@0.1: {roc_estimator.estimate_bpcer(target_apcer=0.1):.4f}")
     bpcer01 = roc_estimator.estimate_bpcer(target_apcer=0.01)
     print(f" - BPCER@0.01: {bpcer01:.4f}")

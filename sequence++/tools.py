@@ -82,7 +82,7 @@ class CustomDataSet(Dataset):
         tensor = []
         mats = {}
         i = 0
-        for filename in self.samples[idx][1]:
+        for filename in sorted(self.samples[idx][1]):
             mat = cv2.imread(filename, cv2.IMREAD_COLOR)
             mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGB)
 
