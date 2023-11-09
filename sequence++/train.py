@@ -23,14 +23,14 @@ cfg = edict()
 cfg.train_in_fp16 = True
 cfg.crop_size = (256, 256)
 cfg.sequence_length = 10
-cfg.batch_size = 32
-cfg.grad_accum_batches = 4
+cfg.batch_size = 4
+cfg.grad_accum_batches = 16
 cfg.num_epochs = 16
 cfg.num_classes = 2
 cfg.augment = True
 cfg.backbone_name = "effnet_v2_s"
 cfg.labels_smoothing = 0.1
-cfg.max_batches_per_train_epoch = 32  # -1 - all
+cfg.max_batches_per_train_epoch = -1  # -1 - use all batches
 crop_format = '256x60x0.1' if cfg.crop_size[0] == 256 else '224x90x0.2'
 local_path = f"/home/alex/Fastdata/deepfakes/sequence/{crop_format}"
 
@@ -67,13 +67,13 @@ print(f" - model size: {model_size_mb(model):.3f} MB")
 
 # Loss and optimizer
 loss_fn = nn.CrossEntropyLoss(label_smoothing=cfg.labels_smoothing)
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+optimizer = optim.Adam([{"params": model.parameters()}, {"params": backbone.parameters()}], lr=0.001)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2, factor=0.2, min_lr=0.00001,
                                                        verbose=True)
 
 # ----------------------------
 
-writer = SummaryWriter(filename_suffix=f'{crop_format}@sequence')
+writer = SummaryWriter(filename_suffix=f'{crop_format}@sequence++')
 
 print("Train dataset:")
 train_dataset = CustomDataSet([
@@ -142,7 +142,8 @@ def update_metrics(mode, epoch, running_loss, roc_estimator):
     if eer < metrics[mode]['EER']:
         metrics[mode]['EER'] = eer
         if mode == 'test':
-            torch.save(model, f"./weights/tmp_encoder_{cfg.backbone_name}@{crop_format}.pth")
+            torch.save(model, f"./weights/++tmp_encoder_{cfg.backbone_name}@{crop_format}.pth")
+            torch.save(backbone, f"./weights/++tmp_{cfg.backbone_name}@{crop_format}.pth")
         print(f" - EER: {eer:.4f} - improvement")
     else:
         print(f" - EER: {eer:.4f}")
@@ -168,6 +169,7 @@ def train(epoch, dataloader):
     ae_avgm.reset()
     speedometer.reset()
     model.train()
+    backbone.train()
     running_loss = 0
     true_positive_live = 0
     false_positive_live = 0
@@ -181,10 +183,9 @@ def train(epoch, dataloader):
         labels = labels.to(device)
         if cfg.train_in_fp16:
             with amp.autocast():
-                with torch.no_grad():
-                    inputs = inputs.view(-1, 3, inputs.shape[-1], inputs.shape[-1])
-                    features = backbone(inputs)
-                    features = features.view(cfg.batch_size, cfg.sequence_length, -1)
+                inputs = inputs.view(-1, 3, inputs.shape[-1], inputs.shape[-1])
+                features = backbone(inputs)
+                features = features.view(cfg.batch_size, cfg.sequence_length, -1)
                 outputs = model(features)
                 loss = loss_fn(outputs, labels)
                 loss = loss / cfg.grad_accum_batches
@@ -196,10 +197,9 @@ def train(epoch, dataloader):
                 scaler.update()
                 optimizer.zero_grad()
         else:
-            with torch.no_grad():
-                inputs = inputs.view(-1, 3, inputs.shape[-1], inputs.shape[-1])
-                features = backbone(inputs)
-                features = features.view(cfg.batch_size, cfg.sequence_length, -1)
+            inputs = inputs.view(-1, 3, inputs.shape[-1], inputs.shape[-1])
+            features = backbone(inputs)
+            features = features.view(cfg.batch_size, cfg.sequence_length, -1)
             outputs = model(features)
             loss = loss_fn(outputs, labels)
             loss = loss / cfg.grad_accum_batches
@@ -239,6 +239,7 @@ def test(epoch, dataloader):
     print("TEST:")
     test_roc_est.reset()
     model.eval()
+    backbone.eval()
     running_loss = 0
     true_positive_live = 0
     false_positive_live = 0

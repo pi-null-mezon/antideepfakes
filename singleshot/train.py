@@ -7,10 +7,9 @@ from torch import nn
 from tqdm import tqdm
 from collections import Counter
 from easydict import EasyDict as edict
-from tools import CustomDataSet, Averagemeter, Speedometer, print_one_line, model_size_mb
+from tools import CustomDataSet, Averagemeter, Speedometer, print_one_line, model_size_mb, ROCEstimator
 from torch.utils.tensorboard import SummaryWriter
 from torch.cuda import amp
-
 import resnet
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -30,7 +29,7 @@ cfg.augment = True
 cfg.model_name = "effnet_v2_s"
 cfg.pretrained = True
 cfg.labels_smoothing = 0.1
-
+cfg.max_batches_per_train_epoch = -1  # -1 - all
 crop_format = '256x60x0.1' if cfg.crop_size[0] == 256 else '224x90x0.2'
 local_path = f"/home/alex/Fastdata/deepfakes/singleshot/{crop_format}"
 
@@ -38,6 +37,7 @@ for key in cfg:
     print(f" - {key}: {cfg[key]}")
 
 # ---------- DNN --------------
+
 if cfg.model_name == "effnet_v2_s":
     model = torchvision.models.efficientnet_v2_s()
     if cfg.pretrained:
@@ -64,17 +64,19 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', pa
 writer = SummaryWriter(filename_suffix=cfg.model_name)
 
 print("Train dataset:")
-train_dataset = CustomDataSet([f"{local_path}/FaceForensics++",
-                               f"{local_path}/Celeb-DF-v2",
-                               f"{local_path}/dfdc/train_part_0",
-                               f"{local_path}/dfdc/train_part_1",
-                               f"{local_path}/dfdc/train_part_3",
-                               f"{local_path}/dfdc/train_part_5",
-                               f"{local_path}/dfdc/train_part_07",
-                               f"{local_path}/dfdc/train_part_11",
-                               f"{local_path}/dfdc/train_part_23",
-                               f"{local_path}/dfdc/train_part_43",
-                               f"{local_path}/dfdc/train_part_47"], cfg.crop_size, do_aug=cfg.augment)
+train_dataset = CustomDataSet([
+    f"{local_path}/FaceForensics++",
+    f"{local_path}/Celeb-DF-v2",
+    f"{local_path}/dfdc/train_part_0",
+    f"{local_path}/dfdc/train_part_1",
+    f"{local_path}/dfdc/train_part_3",
+    f"{local_path}/dfdc/train_part_5",
+    f"{local_path}/dfdc/train_part_07",
+    f"{local_path}/dfdc/train_part_11",
+    f"{local_path}/dfdc/train_part_23",
+    f"{local_path}/dfdc/train_part_43",
+    f"{local_path}/dfdc/train_part_47"
+], cfg.crop_size, do_aug=cfg.augment)
 print(f"  {train_dataset.labels_names()}")
 assert cfg.num_classes == len(train_dataset.labels_names())
 lbls_count = dict(Counter(train_dataset.targets))
@@ -92,21 +94,21 @@ for key in train_dataset.labels_names():
         break
 
 print("Test dataset:")
-test_dataset = CustomDataSet([f"{local_path}/dfdc/train_part_17",
-                              f"{local_path}/dfdc/train_part_41"], cfg.crop_size, do_aug=False)
+test_dataset = CustomDataSet([
+    f"{local_path}/dfdc/train_part_17",
+    f"{local_path}/dfdc/train_part_41",
+], cfg.crop_size, do_aug=False)
 print(f"  {test_dataset.labels_names()}")
 print(f"  {dict(Counter(test_dataset.targets))}")
 test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=True, num_workers=6)
 
 metrics = {
-    'train': {'BPCER': float('inf'), 'APCER': float('inf'), 'loss': float('inf'), 'AE': float('inf')},
-    'test': {'BPCER': float('inf'), 'APCER': float('inf'), 'loss': float('inf'), 'AE': float('inf')}
+    'train': {'EER': float('inf'), 'loss': float('inf'), 'BPCER@0.01': float('inf')},
+    'test': {'EER': float('inf'), 'loss': float('inf'), 'BPCER@0.01': float('inf')}
 }
 
 
-def update_metrics(mode, epoch, running_loss, true_positive_live, false_positive_live, true_negative_live,
-                   false_negative_live):
-    print(f"\n{mode.upper()}:")
+def update_metrics(mode, epoch, running_loss, roc_estimator):
     if not os.path.exists('./weights'):
         os.makedirs('./weights')
     writer.add_scalar(f"Loss/{mode}", running_loss, epoch)
@@ -115,40 +117,33 @@ def update_metrics(mode, epoch, running_loss, true_positive_live, false_positive
         print(f" - loss:  {running_loss:.5f} - improvement")
     else:
         print(f" - loss:  {running_loss:.5f}")
-    prob = false_positive_live / (false_positive_live + true_negative_live + 1E-6)
-    writer.add_scalar(f"APCER/{mode}", prob, epoch)
-    if prob < metrics[mode]['APCER']:
-        metrics[mode]['APCER'] = prob
-        print(f" - APCER: {prob:.5f} - improvement")
-    else:
-        print(f" - APCER: {prob:.5f}")
-    apcer = prob
-    prob = false_negative_live / (false_negative_live + true_positive_live + 1E-6)
-    writer.add_scalar(f"BPCER/{mode}", prob, epoch)
-    if prob < metrics[mode]['BPCER']:
-        metrics[mode]['BPCER'] = prob
-        print(f" - BPCER: {prob:.5f} - improvement")
-    else:
-        print(f" - BPCER: {prob:.5f}")
-    bpcer = prob
-    prob = (bpcer + apcer) / 2
-    writer.add_scalar(f"Average error/{mode}", prob, epoch)
-    if prob < metrics[mode]['AE']:
-        metrics[mode]['AE'] = prob
+    eer, err_s = roc_estimator.estimate_eer()
+    writer.add_scalar(f"EER/{mode}", eer, epoch)
+    if eer < metrics[mode]['EER']:
+        metrics[mode]['EER'] = eer
         if mode == 'test':
-            torch.save(model, f"./weights/{cfg.model_name}@{crop_format}.pth")
-        print(f" - Average error: {prob:.5f} - improvement")
+            torch.save(model, f"./weights/tmp_{cfg.backbone_name}@{crop_format}.pth")
+        print(f" - EER: {eer:.4f} - improvement")
     else:
-        print(f" - Average error: {prob:.5f}")
+        print(f" - EER: {eer:.4f}")
+    print(f" - BPCER@0.1: {roc_estimator.estimate_bpcer(target_apcer=0.1):.4f}")
+    bpcer01 = roc_estimator.estimate_bpcer(target_apcer=0.01)
+    print(f" - BPCER@0.01: {bpcer01:.4f}")
+    writer.add_scalar(f"BPCER@0.01/{mode}", bpcer01, epoch)
+    print(f" - BPCER@0.001: {roc_estimator.estimate_bpcer(target_apcer=0.001):.4f}")
 
 
 loss_avgm = Averagemeter()
 ae_avgm = Averagemeter()
 speedometer = Speedometer()
 scaler = amp.grad_scaler.GradScaler()
+train_roc_est = ROCEstimator()
+test_roc_est = ROCEstimator()
 
 
 def train(epoch, dataloader):
+    print("TRAIN:")
+    train_roc_est.reset()
     loss_avgm.reset()
     ae_avgm.reset()
     speedometer.reset()
@@ -160,6 +155,8 @@ def train(epoch, dataloader):
     false_negative_live = 0
     samples_enrolled = 0
     for batch_idx, (inputs, labels) in enumerate(dataloader):
+        if batch_idx == cfg.max_batches_per_train_epoch:
+            break
         inputs = inputs.to(device)
         labels = labels.to(device)
         if cfg.train_in_fp16:
@@ -184,6 +181,9 @@ def train(epoch, dataloader):
                 optimizer.step()
                 optimizer.zero_grad()
         with torch.no_grad():
+            scores = torch.nn.functional.softmax(outputs, dim=1)
+            train_roc_est.update(live_scores=scores[labels == alive_lbl, alive_lbl].tolist(),
+                                 attack_scores=scores[labels != alive_lbl, alive_lbl].tolist())
             running_loss += loss.item()
             _, predicted = outputs.max(1)
             _tp_live = (predicted[labels == alive_lbl] == alive_lbl).sum().item()
@@ -204,15 +204,12 @@ def train(epoch, dataloader):
             f'{100 * samples_enrolled / len(train_dataset):.1f} % | '
             f'{speedometer.speed():.0f} samples / s '
         )
-    update_metrics('train', epoch,
-                   running_loss / len(dataloader),
-                   true_positive_live,
-                   false_positive_live,
-                   true_negative_live,
-                   false_negative_live)
+    update_metrics('train', epoch, running_loss / len(dataloader), train_roc_est)
 
 
 def test(epoch, dataloader):
+    print("TEST:")
+    test_roc_est.reset()
     model.eval()
     running_loss = 0
     true_positive_live = 0
@@ -227,17 +224,16 @@ def test(epoch, dataloader):
             loss = loss_fn(outputs, labels)
             running_loss += loss.item()
             _, predicted = outputs.max(1)
+            scores = torch.nn.functional.softmax(outputs, dim=1)
+            test_roc_est.update(live_scores=scores[labels == alive_lbl, alive_lbl].tolist(),
+                                attack_scores=scores[labels != alive_lbl, alive_lbl].tolist())
             true_positive_live += (predicted[labels == alive_lbl] == alive_lbl).sum().item()
             false_positive_live += (predicted[labels != alive_lbl] == alive_lbl).sum().item()
             true_negative_live += (predicted[labels != alive_lbl] != alive_lbl).sum().item()
             false_negative_live += (predicted[labels == alive_lbl] != alive_lbl).sum().item()
-    update_metrics('test', epoch,
-                   running_loss / len(dataloader),
-                   true_positive_live,
-                   false_positive_live,
-                   true_negative_live,
-                   false_negative_live)
-    scheduler.step(metrics['test']['AE'])
+    update_metrics('test', epoch, running_loss / len(dataloader), test_roc_est)
+    scheduler.step(metrics['test']['EER'])
+    print("\n")
 
 
 for epoch in range(cfg.num_epochs):

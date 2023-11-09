@@ -66,7 +66,7 @@ class CustomDataSet(Dataset):
             #A.GaussNoise(p=0.5, var_limit=(1, 35)),
             #A.ImageCompression(p=0.25, quality_lower=70, quality_upper=100),
             #A.RandomBrightnessContrast(p=0.25, brightness_limit=(-0.25, 0.25)),
-            A.ColorJitter(p=1.0)
+            A.ColorJitter(p=0.5)
         ], p=1.0)
 
     def labels_names(self):
@@ -148,3 +148,64 @@ def model_size_mb(model):
     for buffer in model.buffers():
         buffers_size += buffer.nelement() * buffer.element_size()
     return (params_size + buffers_size) / 1024 ** 2
+
+
+class ROCEstimator:
+    def __init__(self):
+        self.live_scores = []
+        self.attack_scores = []
+        self._apcer_curve = None
+        self._bpcer_curve = None
+
+    def reset(self):
+        self.live_scores = []
+        self.attack_scores = []
+        self._apcer_curve = None
+        self._bpcer_curve = None
+
+    def update(self, live_scores: list, attack_scores: list):
+        self.live_scores += live_scores
+        self.attack_scores += attack_scores
+
+    def apcer_curve(self, steps_total=1E3, epsilon=1.0E-6, force_recalc=True):
+        if force_recalc:
+            self._apcer_curve = None
+        if self._apcer_curve is not None:
+            return self._apcer_curve
+        self._apcer_curve = []
+        numpy_scores = np.asarray(self.attack_scores)
+        total_outcomes = len(numpy_scores)
+        for threshold in np.linspace(start=0.0 - epsilon, stop=1.0 + epsilon, num=int(steps_total)):
+            self._apcer_curve.append(np.sum(numpy_scores > threshold) / total_outcomes)
+        return self._apcer_curve
+
+    def bpcer_curve(self, steps_total=1E3, epsilon=1.0E-6, force_recalc=True):
+        if force_recalc:
+            self._bpcer_curve = None
+        if self._bpcer_curve is not None:
+            return self._bpcer_curve
+        self._bpcer_curve = []
+        numpy_scores = np.asarray(self.live_scores)
+        total_outcomes = len(numpy_scores)
+        for threshold in np.linspace(start=0.0 - epsilon, stop=1.0 + epsilon, num=int(steps_total)):
+            self._bpcer_curve.append(np.sum(numpy_scores <= threshold) / total_outcomes)
+        return self._bpcer_curve
+
+    def estimate_eer(self, steps_total=1E3, epsilon=1.0E-6):
+        attack_pts = self.apcer_curve(steps_total, epsilon, force_recalc=False)
+        live_pts = self.bpcer_curve(steps_total, epsilon, force_recalc=False)
+        index = 0
+        for i in range(0, len(attack_pts)):
+            index = i
+            if (attack_pts[i] - live_pts[i]) <= 0:
+                break
+        return (attack_pts[index] + live_pts[index]) / 2.0, index / steps_total
+
+    def estimate_bpcer(self, target_apcer, steps_total=1E3, epsilon=1.0E-6):
+        attack_pts = self.apcer_curve(steps_total, epsilon, force_recalc=False)
+        live_pts = self.bpcer_curve(steps_total, epsilon, force_recalc=False)
+        for i in range(0, len(attack_pts) - 1):
+            if (attack_pts[i] - target_apcer) * (attack_pts[i + 1] - target_apcer) <= 0:
+                return live_pts[i + 1] - (target_apcer - attack_pts[i + 1]) * \
+                       (live_pts[i + 1] - live_pts[i]) / (attack_pts[i] - attack_pts[i + 1])
+        return live_pts[len(live_pts) - 1]
