@@ -189,3 +189,8 @@ def normalize_image(bgr, mean, std, swap_red_blue=False):
     tmp -= np.asarray(mean, dtype=np.float32).reshape(1, 1, 3)
     tmp /= np.asarray(std, dtype=np.float32).reshape(1, 1, 3)
     return tmp
+
+
+def image2tensor(bgr, mean, std, swap_red_blue=False):
+    tmp = normalize_image(bgr, mean, std, swap_red_blue)
+    return np.transpose(tmp, axes=(2, 0, 1))  # HxWxC -> CxHxW

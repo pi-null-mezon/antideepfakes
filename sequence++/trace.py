@@ -7,7 +7,7 @@ import os
 
 cfg = EasyDict()
 cfg.crop_size = (256, 256)
-cfg.sequence_length = 8
+cfg.sequence_length = 10
 cfg.batch_size = 4
 cfg.num_classes = 2
 cfg.alive_lbl = 1

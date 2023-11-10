@@ -59,7 +59,7 @@ print(f" - backbone size: {model_size_mb(backbone):.3f} MB")
 
 # -------- SEQUENCE PROCESSING DNN ------------
 
-model = EncoderNet(d_model=1280, num_heads=8, num_layers=1, d_ff=2560, dropout_l=0.1, dropout=0.2,
+model = EncoderNet(d_model=1280, num_heads=8, num_layers=1, d_ff=128, dropout_l=0.1, dropout=0.2,
                    num_classes=cfg.num_classes, max_seq_length=cfg.sequence_length)
 model = model.to(device)
 

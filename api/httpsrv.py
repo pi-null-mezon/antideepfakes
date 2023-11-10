@@ -6,14 +6,16 @@
 
 import os
 import json
+import uuid
+
 from fastapi import FastAPI, UploadFile, File, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import Optional
 import uvicorn
 
-import cv2
 import torch
+from deepfakes import DD256x60x01, DD224x90x02, liveness_score
 from face import YuNetFaceDetector
 from landmarks import LWADetector
 
@@ -34,11 +36,10 @@ EBS = {
     "face not found": {"http": 400, "code": "LDE-002006", "message": "Лицо не найдено"},
     "too small face": {"http": 400, "code": "LDE-002008", "message": "Лицо слишком маленького размера"},
     "multiple faces": {"http": 400, "code": "LDE-002007", "message": "Найдено больше одного лица"},
-    "image read": {"http": 400, "code": "LDE-002004", "message": "Не удалось прочитать биометрический образец"},
+    "sample read": {"http": 400, "code": "LDE-002004", "message": "Не удалось прочитать биометрический образец"},
     "internal": {"http": 500, "code": "LDE-001001", "message": "Внутренняя ошибка БП обнаружения витальности"},
     "content": {"http": 400, "code": "LDE-002005", "message": "Неверная multiparted-часть HTTP запроса"},
 }
-
 
 class HealthModel(BaseModel):
     status: int = Field(default=0, description="0 - исправен, !=0 - неисправен")
@@ -55,28 +56,32 @@ class LivenessModel(BaseModel):
     score: float = Field(description="степень уверенности в подлинности биометрического предъявления "
                                      "от 0.0 до 1.0 (чем выше, тем выше уверенность)")
 
-
 face_detector = None
 landmarks_detector = None
-liveness_classifiers = None
+deepfake_detectors = None
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 @app.on_event('startup')
 async def startup_event():
-    print(f"Hardware backend: '{device}'", flush=True)
+    print(f"  - inference backend: '{device}'")
     global face_detector
-    face_detector = YuNetFaceDetector("../weights/final/fd.onnx")
+    face_detector = YuNetFaceDetector("./weights/final/fd.onnx")
     global landmarks_detector
-    landmarks_detector = LWADetector("../weights/final/ld.onnx")
-    global liveness_classifiers
-    liveness_classifiers = [
-        face.TorchMobilenetV3LivenessClassifier(device),
-        face.TorchEfficientnetB3LivenessClassifier(device)
+    landmarks_detector = LWADetector("./weights/final/ld.onnx")
+    global deepfake_detectors
+    deepfake_detectors = [
+        DD256x60x01([
+            './weights/final/256x60x0.1/tmp_dd_on_effnet_v2_s@256x60x0.1.jit',
+        ], device),
+        #DD224x90x02([
+        #    './weights/final/224x90x0.2/tmp_dd_on_effnet_v2_s@224x90x0.2.jit',
+        #], device)
     ]
+    print("  - warming up nets, please wait...")
+    liveness_score('./resources/fake.mp4', deepfake_detectors, face_detector, landmarks_detector, delete_file=False)
 
-
-@app.get(f"{prefix}/health",
+''''@app.get(f"{prefix}/health",
          response_class=JSONResponse,
          tags=["ЕБС"],
          response_model=HealthModel,
@@ -97,7 +102,7 @@ async def get_status():
     print(f"attack sample liveness_score: {replay_liveness_score}")
     if replay_liveness_score > live_liveness_score:
         return {"status": 3, "message": "БП обнаружения витальности неработоспособен"}
-    return {"status": 0}
+    return {"status": 0}'''
 
 
 @app.post(f"{prefix}/detect",
@@ -107,8 +112,8 @@ async def get_status():
           responses={400: {"model": ErrorModel}},
           summary="провести проверку видео")
 async def process(request: Request,
-                  bio_sample: Optional[UploadFile] = File(None, description="файл для проверки, только mp4 или webm"),
-                  metadata: Optional[UploadFile] = File(None, description="метаданные согласно методическим рекомендациям ЕБС, только json")):
+                  bio_sample: UploadFile = File(None, description="файл для проверки [mp4, webm]"),
+                  metadata: UploadFile = File(None, description="метаданные [json]")):
     if 'multipart/form-data' not in request.headers['content-type']:
         print("Wrong content-type", flush=True)
         error = 'content type'
@@ -142,47 +147,48 @@ async def process(request: Request,
         error = 'content'
         return JSONResponse(status_code=EBS[error]['http'],
                             content={"code": EBS[error]['code'], "message": EBS[error]['message']})
-    if "type" not in json_metadata["actions"][0] or "duration" not in json_metadata["actions"][0] or "message" not in \
-            json_metadata["actions"][0]:
+    if "type" not in json_metadata["actions"][0]:
         print("'actions' does not contain type field", flush=True)
         error = 'mnemonic'
         return JSONResponse(status_code=EBS[error]['http'],
                             content={"code": EBS[error]['code'], "message": EBS[error]['message']})
-    if json_metadata["actions"][0]["type"] != "photo-type":
-        print("'actions' does not contain 'photo-type' items", flush=True)
+    if json_metadata["actions"][0]["type"] != "deepfake-type":
+        print("'actions' does not contain 'deepfake-type' items", flush=True)
         error = 'content'
         return JSONResponse(status_code=EBS[error]['http'],
                             content={"code": EBS[error]['code'], "message": EBS[error]['message']})
     # bio_sample processing
-    if bio_sample.content_type not in ['image/jpeg', 'image/png']:
+    if bio_sample.content_type not in ['video/mp4', 'video/webm']:
         print("Wrong metadata content-type'", flush=True)
         error = 'content'
         return JSONResponse(status_code=EBS[error]['http'],
                             content={"code": EBS[error]['code'], "message": EBS[error]['message']})
-    bio_sample = await bio_sample.read()
-    if len(bio_sample) == 0:
+    bio_sample_bytes = await bio_sample.read()
+    if len(bio_sample_bytes) == 0:
         print("Zero size bio_sample", flush=True)
-        error = 'image read'
+        error = 'sample read'
         return JSONResponse(status_code=EBS[error]['http'],
                             content={"code": EBS[error]['code'], "message": EBS[error]['message']})
-    img = cv2.imdecode(numpy.frombuffer(bio_sample, dtype=numpy.uint8), cv2.IMREAD_COLOR)
-    if not isinstance(img, numpy.ndarray):
+    video_filename = f"./weights/{uuid.uuid4().hex}.{bio_sample.content_type.rsplit('/', 1)[1]}"
+    with open(video_filename, 'wb') as o_f:
+        o_f.write(bio_sample_bytes)
+
+    try:
+        score = liveness_score(video_filename, deepfake_detectors, face_detector, landmarks_detector, delete_file=True)
+    except IOError as ex:
         print("Can not decode bio_sample", flush=True)
-        error = 'image read'
+        error = 'sample read'
         return JSONResponse(status_code=EBS[error]['http'],
                             content={"code": EBS[error]['code'], "message": EBS[error]['message']})
-    list_of_landmarks = face_detector.detect(img)
-    if len(list_of_landmarks) > 1:
-        error = 'multiple faces'
-        return JSONResponse(status_code=EBS[error]['http'],
-                            content={"code": EBS[error]['code'], "message": EBS[error]['message']})
-    elif len(list_of_landmarks) == 0:
+    #if len(list_of_landmarks) > 1:
+    #    error = 'multiple faces'
+    #    return JSONResponse(status_code=EBS[error]['http'],
+    #                        content={"code": EBS[error]['code'], "message": EBS[error]['message']})
+    if score is None:
         error = 'face not found'
         return JSONResponse(status_code=EBS[error]['http'],
                             content={"code": EBS[error]['code'], "message": EBS[error]['message']})
-
-    liveness_score = face.liveness_score(liveness_classifiers, img, list_of_landmarks[0])
-    return {"score": liveness_score, "passed": bool(liveness_score > 0.5)}
+    return {"score": score, "passed": bool(score > 0.5)}
 
 
 @app.get(f"{prefix}/detect",
@@ -200,13 +206,13 @@ async def dummy_process():
 
 
 if __name__ == '__main__':
-    server_name = 'SystemFailure Deepfake Detection HTTP service'
+    server_name = 'SystemFailure©: Deepfake Detection HTTP service'
     print('=' * len(server_name), flush=True)
     print(server_name, flush=True)
     print('=' * len(server_name), flush=True)
-    print(f'Version: {app.version}-fastapi', flush=True)
+    print(f'Version: {app.version}', flush=True)
     print('API: EBS', flush=True)
-    print('Release date: 29.06.2022', flush=True)
+    print('Release date: 12.11.2022', flush=True)
     print('=' * len(server_name), flush=True)
     print('Configuration:', flush=True)
     http_srv_addr = os.getenv("APP_ADDR", "0.0.0.0")

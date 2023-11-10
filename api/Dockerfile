@@ -16,7 +16,8 @@ ENV LANG en_US.UTF-8
 ENV DEBIAN_FRONTEND=noninteractive
 
 COPY / /usr/local/bin
-COPY ../weights/final /usr/local/weights/final
+COPY ../weights/final /usr/local/bin/weights/final
+COPY ../resources /usr/local/bin/resources
 
 # Install dependencies
 RUN apt-get update && \

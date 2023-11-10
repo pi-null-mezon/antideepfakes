@@ -1,35 +1,59 @@
-from imgutils import extract_face_fixed_eyes_distance, normalize_image
+import torch
+import torch.jit
+from imgutils import extract_face_fixed_eyes_distance, image2tensor
 from landmarks import LWADetector
 from face import FaceDetector
-from numpy import np
+import numpy as np
 import cv2
+import os
 
 
 class VideoFileSource:
-    def __init__(self, filename, strobe):
+    def __init__(self, cap, filename, delete_file=True):
         self.filename = filename
-        self.strobe = strobe
+        self.strobe = 1
         self.counter = 0
-        self.cap = cv2.VideoCapture(filename)
-        assert self.cap.isOpened(), f"Can not open '{filename}'!"
+        self.cap = cap
+        self.delete_file = delete_file
+        assert self.cap.isOpened()
+
+    def frames_total(self):
+        return int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    def frames_last(self):
+        return int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) - self.counter
+
+    def set_strobe(self, strobe):
+        self.strobe = strobe
 
     def next(self):
         for i in range(self.strobe):
             ret, frame = self.cap.read()
             self.counter += 1
             if not ret:
+                if self.delete_file:
+                    os.remove(self.filename)
                 raise StopIteration
-        return f"frame_{self.counter:06d}", frame
+        return f"frame_{(self.counter-1):06d}", frame
 
 
 class FaceVideoProcessor:
     # Base abstraction for all kinds of possible face processors
     def process(self, video: VideoFileSource, fdet: FaceDetector, ldet: LWADetector):
-        raise NotImplemented
+        sequences = self.prepare_input_batch(video, fdet, ldet)
+        if sequences is None:  # no face found
+            return None
+        scores = []
+        with torch.no_grad():
+            for model in self.sequence_models:
+                prediction = model(sequences)
+                scores.append(prediction.mean(dim=0)[1].item())
+        return np.array(scores).mean().item()
 
 
 class AlignedCropsProcessor(FaceVideoProcessor):
-    def __init__(self, width, height, eyes_dst, rotate, v2hshift, mean, std, interp, swap_red_blue):
+    def __init__(self, width, height, eyes_dst, rotate, v2hshift, mean, std, interp, swap_red_blue, strobe,
+                 sequence_length, device):
         FaceVideoProcessor.__init__(self)
         self.width = width
         self.height = height
@@ -40,42 +64,97 @@ class AlignedCropsProcessor(FaceVideoProcessor):
         self.std = std
         self.interp = interp
         self.swap_red_blue = swap_red_blue
+        self.strobe = strobe
+        self.sequence_length = sequence_length
+        self.device = device
 
     def prepare_input_batch(self, video: VideoFileSource, fdet: FaceDetector, ldet: LWADetector):
-        cap = cv2.VideoCapture("video.mp4")
-        length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        print(length)
+        crops = []
+        while True:
+            try:
+                name, frame = video.next()
+            except StopIteration:
+                break
+            if isinstance(frame, np.ndarray):
+                bboxes = fdet.detect(frame)
+                if len(bboxes) > 0:
+                    bboxes.sort(key=lambda x: x.area(), reverse=True)
+                    angles, landmarks = ldet.process(frame, [bboxes[0]])
+                    crop, pts = extract_face_fixed_eyes_distance(frame, landmarks[0], self.eyes_dst,
+                                                                 (self.width, self.height), self.rotate, self.v2hshift)
+                    crops.append(crop)
+
+        if len(crops) == 0:
+            return None
 
         tensors = []
-        for img, lmks in zip(imgs, landmarks):
-            crop, pts = extract_face_fixed_eyes_distance(img, lmks, self.eyes_dst, (self.width, self.height),
-                                                         self.rotate, self.v2hshift)
+        for crop in crops:
             # DEBUG VISUALIZATION
-            # for pt in pts:
-            #    cv2.circle(crop, (int(pt.x), int(pt.y)), 1, (0, 255, 0), -1, cv2.LINE_AA)
             # cv2.imshow('crop', crop)
-            # cv2.waitKey(0)
-            tensors.append(normalize_image(crop, self.mean, self.std, self.swap_red_blue))
-        return cv2.dnn.blobFromImages(images=tensors)
+            # cv2.waitKey(1)
+            tensors.append(image2tensor(crop, self.mean, self.std, self.swap_red_blue))
+        tensors = torch.from_numpy(np.stack(tensors))  # frames x channels x heights x width
+
+        possible_series = (tensors.shape[0] - self.strobe) // self.sequence_length
+        if possible_series <= 1:
+            if tensors.shape[0] < self.sequence_length:
+                seria = torch.empty(size=(self.sequence_length, 3, self.height, self.width))
+                for i in range(tensors.shape[0]):
+                    seria[i] = tensors[i]
+                for i in range(tensors.shape[0], self.sequence_length):
+                    seria[i] = tensors[-1]
+            else:
+                step = tensors.shape[0] // self.sequence_length
+                seria = tensors[0::step][:self.sequence_length]
+            seria = seria.unsqueeze(0)  # add batch dimension
+        else:
+            step = tensors.shape[0] // self.sequence_length
+            seria = torch.empty(size=(min(4, step), self.sequence_length, 3, self.height, self.width))
+            for i in range(seria.shape[0]):
+                seria[i] = tensors[i + torch.randint(0, step, (1,))::step][:self.sequence_length]
+        return seria.to(self.device)
 
 
-class DeepfakeDetector(AlignedCropsProcessor):
-    def __init__(self, filename):
-        AlignedCropsProcessor.__init__(self,
-                                       width=96,
-                                       height=112,
-                                       eyes_dst=37.0,
-                                       rotate=True,
-                                       v2hshift=-0.025,
-                                       mean=3 * [0.5],
-                                       std=3 * [0.501960784],
-                                       interp=cv2.INTER_LINEAR,
-                                       swap_red_blue=False)
-        self.model = cv2.dnn.readNetFromONNX(filename)
+class DD256x60x01(AlignedCropsProcessor):
+    def __init__(self, filenames: list, device):
+        AlignedCropsProcessor.__init__(self, width=256, height=256, eyes_dst=60.0, rotate=True, v2hshift=-0.1,
+                                       mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225],
+                                       interp=cv2.INTER_LINEAR, swap_red_blue=True,
+                                       strobe=17, sequence_length=10,
+                                       device=device)
+        self.sequence_models = []
+        for filename in filenames:
+            model = torch.jit.load(filename).to(self.device)
+            model.eval()
+            self.sequence_models.append(model)
 
 
-    def process(self, video: VideoFileSource, fdet: FaceDetector, ldet: LWADetector):
-        input_blob = self.prepare_input_batch(video, fdet, ldet)
-        self.model.setInput(input_blob)
-        output_blob = self.model.forward()
-        return np.squeeze(output_blob, axis=1).tolist()
+class DD224x90x02(AlignedCropsProcessor):
+    def __init__(self, filenames: list, device):
+        AlignedCropsProcessor.__init__(self, width=224, height=224, eyes_dst=90.0, rotate=True, v2hshift=-0.2,
+                                       mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225],
+                                       interp=cv2.INTER_LINEAR, swap_red_blue=True,
+                                       strobe=17, sequence_length=10,
+                                       device=device)
+        self.sequence_models = []
+        for filename in filenames:
+            model = torch.jit.load(filename).to(self.device)
+            model.eval()
+            self.sequence_models.append(model)
+
+
+# Returns liveness score if video file was decoded successfully and face has been found (even on single frame)
+# In case of file decode error raises IOError
+# In case of no face has been found returns None
+def liveness_score(filename: str, dds: list, fd: FaceDetector, ld: LWADetector, delete_file):
+    scores = []
+    for index in range(len(dds)):
+        cap = cv2.VideoCapture(filename)
+        if not cap.isOpened():
+            raise IOError
+        video = VideoFileSource(cap, filename, delete_file=True if (delete_file and index == (len(dds) - 1)) else False)
+        score = dds[index].process(video, fd, ld)
+        if score is None:
+            return None
+        scores.append(score)
+    return np.array(scores).mean().item()

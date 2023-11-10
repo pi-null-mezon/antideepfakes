@@ -24,7 +24,8 @@ for key in cfg:
 # --------------------------------
 
 singleshot_model = torch.load(f'./weights/{cfg.backbone_name}@{crop_format}.pth').to(device)
-singleshot_model.classifier.append(torch.nn.Softmax(dim=1))
+if cfg.backbone_name == "effnet_v2_s":
+    singleshot_model.classifier.append(torch.nn.Softmax(dim=1))
 singleshot_model.eval()
 
 traced_singleshot_model = torch.jit.load(f'./weights/tmp_{cfg.backbone_name}@{crop_format}.jit').to(device)

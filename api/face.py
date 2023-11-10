@@ -10,7 +10,7 @@ class FaceDetector:
 
 
 class YuNetFaceDetector(FaceDetector):  # https://github.com/opencv/opencv_zoo/tree/master/models/face_detection_yunet
-    def __init__(self, filename, input_size=128, threshold=0.9):
+    def __init__(self, filename, input_size=72, threshold=0.9):
         self.input_size = (input_size, input_size)
         self.model = cv2.FaceDetectorYN_create(model=filename,
                                                config='',
