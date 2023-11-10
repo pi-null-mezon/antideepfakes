@@ -89,11 +89,9 @@ class ResNetFaceGray(nn.Module):
         if self.attention:
             self.attention_layer = Self_Attn(output_features, 'relu')
         self.dropout5 = nn.Dropout(p=0.1)
-        self.fc5 = nn.Linear(100352, 512)
+        self.final_pool = nn.AdaptiveAvgPool2d(1)
         self.bn5 = nn.BatchNorm1d(512)
-        self.prelu5 = nn.PReLU()
-        self.dropout6 = nn.Dropout(p=0.1)
-        self.fc6 = nn.Linear(512, output_features)
+        self.fc5 = nn.Linear(512, output_features)
         self.bn6 = nn.BatchNorm1d(output_features)
 
 
@@ -138,12 +136,10 @@ class ResNetFaceGray(nn.Module):
         if self.attention:
             x = self.attention_layer(x)
 
-        x = torch.flatten(x, start_dim=1)
         x = self.dropout5(x)
-        x = self.fc5(x)
+        x = self.final_pool(x)
+        x = torch.flatten(x, start_dim=1)
         x = self.bn5(x)
-        x = self.prelu5(x)
-        x = self.dropout6(x)
-        x = self.fc6(x)
+        x = self.fc5(x)
         x = self.bn6(x)
         return x

@@ -5,7 +5,7 @@ from tools import read_img_as_torch_tensor, check_absolute_difference, benchmark
 import os
 
 cfg = EasyDict()
-cfg.crop_size = (224, 224)
+cfg.crop_size = (256, 256)
 cfg.batch_size = 4
 cfg.num_classes = 2
 cfg.alive_lbl = 1
