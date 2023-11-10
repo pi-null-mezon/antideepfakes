@@ -35,6 +35,7 @@ sequence_model.eval()
 
 # ---------------------------------
 
+print("Test dataset:")
 test_dataset = CustomDataSet([
     f"{local_path}/dfdc/train_part_17",
     f"{local_path}/dfdc/train_part_41"

@@ -232,7 +232,7 @@ def train(epoch, dataloader):
             f'{100 * samples_enrolled / len(train_dataset):.1f} % | '
             f'{speedometer.speed():.0f} samples / s '
         )
-    update_metrics('train', epoch, running_loss / len(dataloader), train_roc_est)
+    update_metrics('train', epoch, running_loss / batch_idx, train_roc_est)
 
 
 def test(epoch, dataloader):
@@ -240,10 +240,6 @@ def test(epoch, dataloader):
     test_roc_est.reset()
     model.eval()
     running_loss = 0
-    true_positive_live = 0
-    false_positive_live = 0
-    true_negative_live = 0
-    false_negative_live = 0
     with torch.no_grad():
         for batch_idx, (inputs, labels) in enumerate(tqdm(dataloader, file=sys.stdout)):
             inputs = inputs.to(device)
@@ -254,14 +250,9 @@ def test(epoch, dataloader):
             outputs = model(features)
             loss = loss_fn(outputs, labels)
             running_loss += loss.item()
-            _, predicted = outputs.max(1)
             scores = torch.nn.functional.softmax(outputs, dim=1)
             test_roc_est.update(live_scores=scores[labels == alive_lbl, alive_lbl].tolist(),
                                 attack_scores=scores[labels != alive_lbl, alive_lbl].tolist())
-            true_positive_live += (predicted[labels == alive_lbl] == alive_lbl).sum().item()
-            false_positive_live += (predicted[labels != alive_lbl] == alive_lbl).sum().item()
-            true_negative_live += (predicted[labels != alive_lbl] != alive_lbl).sum().item()
-            false_negative_live += (predicted[labels == alive_lbl] != alive_lbl).sum().item()
     update_metrics('test', epoch, running_loss / len(dataloader), test_roc_est)
     scheduler.step(metrics['test']['EER'])
     print("\n")
@@ -272,10 +263,6 @@ def test_naive_averaging(dataloader):
     singleshot.to(device)
     singleshot.eval()
     test_roc_est.reset()
-    true_positive_live = 0
-    false_positive_live = 0
-    true_negative_live = 0
-    false_negative_live = 0
     with torch.no_grad():
         for batch_idx, (inputs, labels) in enumerate(tqdm(dataloader, file=sys.stdout)):
             inputs = inputs.to(device)
@@ -284,13 +271,8 @@ def test_naive_averaging(dataloader):
             features = singleshot(inputs)
             features = features.view(cfg.batch_size, cfg.sequence_length, -1)
             scores = torch.nn.functional.softmax(features, dim=2)[:, :, alive_lbl].mean(dim=1)
-            predicted = torch.where(scores > 0.5, alive_lbl, 0)
             test_roc_est.update(live_scores=scores[labels == alive_lbl].tolist(),
                                 attack_scores=scores[labels != alive_lbl].tolist())
-            true_positive_live += (predicted[labels == alive_lbl] == alive_lbl).sum().item()
-            false_positive_live += (predicted[labels != alive_lbl] == alive_lbl).sum().item()
-            true_negative_live += (predicted[labels != alive_lbl] != alive_lbl).sum().item()
-            false_negative_live += (predicted[labels == alive_lbl] != alive_lbl).sum().item()
     eer, err_s = test_roc_est.estimate_eer()
     print(f" - EER: {eer:.4f} (score: {err_s:.4f})")
     print(f" - BPCER@0.1: {test_roc_est.estimate_bpcer(target_apcer=0.1):.4f}")
