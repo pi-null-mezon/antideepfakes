@@ -1,0 +1,32 @@
+version: "3.9"  
+networks:
+  net:
+    driver: overlay
+services:
+  bisolut-liveness-face:
+    image: ${REGISTRY_URl}/${VENDOR}/${APP1_IMAGE}:${APP1_TAG}
+    environment:
+      - PATH_PREFIX=${PATH_PREFIX}
+      - WORKERS=${WORKERS}
+      - LOG_MAX_SIZE=${LOG_MAX_SIZE}
+      - LOG_MAX_FILE=${LOG_MAX_FILE}
+    logging:
+      options:
+        max-size: ${LOG_MAX_SIZE}
+        max-file: ${LOG_MAX_FILE}
+    ports:
+      - ${PUBLISH_PORT}:5000
+    deploy:
+      placement:
+        max_replicas_per_node: ${REPL_PER_NODE}
+      mode: replicated
+      replicas: ${CORE_COUNT}
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]

@@ -123,6 +123,22 @@ class EncoderNet(nn.Module):
         return x
 
 
+class DeepfakeDetector(nn.Module):
+    def __init__(self, single_shot, encoder):
+        super(DeepfakeDetector, self).__init__()
+        self.ss = single_shot
+        self.enc = encoder
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, x):
+        # dimensions of x: batch_size, sequence_length, channels, height, width
+        batch_size, seq_length = x.shape[0], x.shape[1]
+        y = self.ss(x.view(-1, x.shape[-3], x.shape[-2], x.shape[-1])).view(batch_size, seq_length, -1)
+        y = self.enc(y)
+        y = self.softmax(y)
+        return y
+
+
 if __name__ == "__main__":
     torch.manual_seed(2308)
 

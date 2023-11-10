@@ -22,15 +22,15 @@ os.environ['TORCH_HOME'] = './weights'
 cfg = edict()
 cfg.train_in_fp16 = True
 cfg.crop_size = (256, 256)
-cfg.sequence_length = 10
-cfg.batch_size = 4
+cfg.sequence_length = 8  # samples to be selected per sequence
+cfg.batch_size = 6       # sequences to be selected in minibatch
 cfg.grad_accum_batches = 16
-cfg.num_epochs = 16
+cfg.num_epochs = 32
 cfg.num_classes = 2
 cfg.augment = True
 cfg.backbone_name = "effnet_v2_s"
 cfg.labels_smoothing = 0.1
-cfg.max_batches_per_train_epoch = 512  # -1 - use all batches
+cfg.max_batches_per_train_epoch = 256 # -1 - use all batches
 crop_format = '256x60x0.1' if cfg.crop_size[0] == 256 else '224x90x0.2'
 local_path = f"/home/alex/Fastdata/deepfakes/sequence/{crop_format}"
 
@@ -59,7 +59,7 @@ print(f" - backbone size: {model_size_mb(backbone):.3f} MB")
 
 # -------- SEQUENCE PROCESSING DNN ------------
 
-model = EncoderNet(d_model=1280, num_heads=8, num_layers=1, d_ff=2560, dropout_l=0.1, dropout=0.2,
+model = EncoderNet(d_model=1280, num_heads=16, num_layers=1, d_ff=320, dropout_l=0.1, dropout=0.1,
                    num_classes=cfg.num_classes, max_seq_length=cfg.sequence_length)
 model = model.to(device)
 

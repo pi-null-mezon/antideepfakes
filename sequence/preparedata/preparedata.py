@@ -37,16 +37,16 @@ def spawn(source_dir: str, target_dir: str, videos: bool, args: list):
     return p
 
 
-crop_size = 256  # 224
-iod_dst = 60     # 90
-vshift = -0.1    # -0.2
+crop_size = 224  # 224
+iod_dst = 90     # 90
+vshift = -0.2    # -0.2
 
 crop_format = f"{crop_size}x{iod_dst}x{-vshift}"
 target_location = f"/home/alex/Fastdata/deepfakes/sequence/{crop_format}"
 
 procs = list()
 conf = config(dthresh=0.9, strobe=17, tside=crop_size, teyes=iod_dst, vshift=vshift)
-
+'''
 dataset_name = 'Celeb-DF-v2'
 procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/Celeb-real", f"{target_location}/{dataset_name}/live", True, conf))
 procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/YouTube-real", f"{target_location}/{dataset_name}/live", True, conf))
@@ -69,6 +69,12 @@ for proc in procs:
 procs = list()
 
 for part in ['0', '1', '3', '5', '07', '11', '17', '23', '41', '43', '47']:
+    dataset_name = f'dfdc/train_part_{part}'
+    procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/live", f"{target_location}/{dataset_name}/live", True, conf))
+    procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/fake", f"{target_location}/{dataset_name}/fake", True, conf))
+'''
+
+for part in ['0', '1', '3', '5', '11', '23', '41', '47']:
     dataset_name = f'dfdc/train_part_{part}'
     procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/live", f"{target_location}/{dataset_name}/live", True, conf))
     procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/fake", f"{target_location}/{dataset_name}/fake", True, conf))

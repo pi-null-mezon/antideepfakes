@@ -84,7 +84,6 @@ class CustomDataSet(Dataset):
         i = 0
         for filename in sorted(self.samples[idx][1]):
             mat = cv2.imread(filename, cv2.IMREAD_COLOR)
-            mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGB)
 
             if mat.shape[0] != self.tsize[0] and mat.shape[1] != self.tsize[1]:
                 interp = cv2.INTER_LINEAR if mat.shape[0]*mat.shape[1] > self.tsize[0]*self.tsize[1] else cv2.INTER_CUBIC
@@ -102,7 +101,7 @@ class CustomDataSet(Dataset):
             # Visual control
             #cv2.imshow("probe", mats[key])
             #cv2.waitKey(0)
-            tensor.append(image2tensor(mats[key], mean=self.mean, std=self.std))
+            tensor.append(image2tensor(mats[key], mean=self.mean, std=self.std, swap_red_blue=True))
         tensor = np.stack(tensor)
         return torch.from_numpy(tensor), self.samples[idx][0]
 

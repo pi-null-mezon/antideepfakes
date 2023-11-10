@@ -23,7 +23,7 @@ def image2tensor(bgr, mean, std, swap_red_blue=False):
 
 
 class CustomDataSet(Dataset):
-    def __init__(self, paths, tsize, do_aug, mean=None, std=None):
+    def __init__(self, paths, tsize, do_aug, mean=None, std=None, min_sequence_length=1):
         """
             :param tsize: target size of images
             :param do_aug: enable augmentations
@@ -46,10 +46,12 @@ class CustomDataSet(Dataset):
             self.labels_list = [s.name for s in os.scandir(path) if s.is_dir()]
             self.labels_list.sort()
             for i, label in enumerate(self.labels_list):
-                files = [(i, os.path.join(path, label, f.name)) for f in os.scandir(os.path.join(path, label))
+                for subdir in [s.name for s in os.scandir(os.path.join(path, label)) if s.is_dir()]:
+                    frames = [os.path.join(path, label, subdir, f.name) for f in os.scandir(os.path.join(path, label, subdir))
                          if (f.is_file() and ('.jp' in f.name or '.pn' in f.name))]
-                self.samples += files
-                self.targets += [i]*len(files)
+                    if len(frames) >= min_sequence_length:
+                        self.samples.append((i, frames[:min_sequence_length]))
+                        self.targets.append(i)
         self.album = A.Compose([
             A.RandomBrightnessContrast(p=0.25, brightness_limit=(-0.25, 0.25)),
             A.HorizontalFlip(p=0.5),
@@ -63,11 +65,9 @@ class CustomDataSet(Dataset):
                      scale=(0.95, 1.05),
                      translate_percent=(-0.05, 0.05),
                      rotate=(-5, 5)),
-            #A.GaussNoise(p=0.5, var_limit=(1, 35)),
-            #A.ImageCompression(p=0.25, quality_lower=70, quality_upper=100),
-            #A.RandomBrightnessContrast(p=0.25, brightness_limit=(-0.25, 0.25)),
+            A.GaussNoise(p=0.5, var_limit=(1, 16)),
             A.ColorJitter(p=0.5)
-        ], p=1.0)
+        ], p=1.0, additional_targets=dict([(f'image{i}', 'image') for i in range(min_sequence_length-1)]))
 
     def labels_names(self):
         d = {}
@@ -79,74 +79,31 @@ class CustomDataSet(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        filename = self.samples[idx][1]
-        mat = cv2.imread(filename, cv2.IMREAD_COLOR)
+        tensor = []
+        mats = {}
+        i = 0
+        for filename in sorted(self.samples[idx][1]):
+            mat = cv2.imread(filename, cv2.IMREAD_COLOR)
 
-        if mat.shape[0] != self.tsize[0] and mat.shape[1] != self.tsize[1]:
-            interp = cv2.INTER_LINEAR if mat.shape[0]*mat.shape[1] > self.tsize[0]*self.tsize[1] else cv2.INTER_CUBIC
-            mat = cv2.resize(mat, self.tsize, interpolation=interp)
+            if mat.shape[0] != self.tsize[0] and mat.shape[1] != self.tsize[1]:
+                interp = cv2.INTER_LINEAR if mat.shape[0]*mat.shape[1] > self.tsize[0]*self.tsize[1] else cv2.INTER_CUBIC
+                mat = cv2.resize(mat, self.tsize, interpolation=interp)
+            if i == 0:
+                mats['image'] = mat
+            else:
+                mats[f'image{i-1}'] = mat
+            i += 1
 
         if self.do_aug:
-            mat = self.album(image=mat)["image"]
+            mats = self.album(**mats)
 
-        # Visual control
-        # cv2.imshow("probe", mat)
-        # cv2.waitKey(0)
-        return torch.from_numpy(image2tensor(mat, mean=self.mean, std=self.std, swap_red_blue=True)), self.samples[idx][0]
-
-
-class Speedometer:
-    def __init__(self, gamma: float = 0.9):
-        self.gamma = gamma
-        self._speed = None
-        self.t0 = perf_counter()
-
-    def reset(self):
-        self._speed = None
-        self.t0 = perf_counter()
-
-    def update(self, samples):
-        if self._speed is None:
-            self._speed = samples / (perf_counter() - self.t0)
-        else:
-            self._speed = self._speed * self.gamma + (1 - self.gamma) * samples / (perf_counter() - self.t0)
-        self.t0 = perf_counter()
-
-    def speed(self):
-        return self._speed
-
-
-class Averagemeter:
-    def __init__(self, gamma: float = 0.99):
-        self.gamma = gamma
-        self.val = None
-
-    def reset(self):
-        self.val = None
-
-    def update(self, val):
-        if self.val is None:
-            self.val = val
-        else:
-            self.val = self.val * self.gamma + (1 - self.gamma) * val
-
-    def value(self):
-        return self.val
-
-
-def print_one_line(s):
-    sys.stdout.write('\r' + s)
-    sys.stdout.flush()
-
-
-def model_size_mb(model):
-    params_size = 0
-    for param in model.parameters():
-        params_size += param.nelement() * param.element_size()
-    buffers_size = 0
-    for buffer in model.buffers():
-        buffers_size += buffer.nelement() * buffer.element_size()
-    return (params_size + buffers_size) / 1024 ** 2
+        for key in mats:
+            # Visual control
+            #cv2.imshow("probe", mats[key])
+            #cv2.waitKey(0)
+            tensor.append(image2tensor(mats[key], mean=self.mean, std=self.std, swap_red_blue=True))
+        tensor = np.stack(tensor)
+        return torch.from_numpy(tensor), self.samples[idx][0]
 
 
 class ROCEstimator:
@@ -208,17 +165,6 @@ class ROCEstimator:
                 return live_pts[i + 1] - (target_apcer - attack_pts[i + 1]) * \
                        (live_pts[i + 1] - live_pts[i]) / (attack_pts[i] - attack_pts[i + 1])
         return live_pts[len(live_pts) - 1]
-
-
-def read_img_as_torch_tensor(filename, size, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], swap_rb=True):
-    mat = cv2.imread(filename, cv2.IMREAD_COLOR)
-    assert (mat.shape[0] == size[0] and mat.shape[1] == size[1]), "sizes missmatch"
-    return torch.from_numpy(image2tensor(mat, mean=mean, std=std, swap_red_blue=swap_rb))
-
-
-def check_absolute_difference(t1: torch.Tensor, t2: torch.Tensor, eps: float = 1.0E-6):
-    diff = torch.abs(t1 - t2).sum().item()
-    return diff < eps
 
 
 def benchmark_inference(model, device, input_tensor_shape, warmup_iters, work_iters, about=''):

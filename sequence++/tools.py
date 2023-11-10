@@ -84,7 +84,6 @@ class CustomDataSet(Dataset):
         i = 0
         for filename in sorted(self.samples[idx][1]):
             mat = cv2.imread(filename, cv2.IMREAD_COLOR)
-            mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGB)
 
             if mat.shape[0] != self.tsize[0] and mat.shape[1] != self.tsize[1]:
                 interp = cv2.INTER_LINEAR if mat.shape[0]*mat.shape[1] > self.tsize[0]*self.tsize[1] else cv2.INTER_CUBIC
@@ -102,7 +101,7 @@ class CustomDataSet(Dataset):
             # Visual control
             #cv2.imshow("probe", mats[key])
             #cv2.waitKey(0)
-            tensor.append(image2tensor(mats[key], mean=self.mean, std=self.std))
+            tensor.append(image2tensor(mats[key], mean=self.mean, std=self.std, swap_red_blue=True))
         tensor = np.stack(tensor)
         return torch.from_numpy(tensor), self.samples[idx][0]
 
@@ -220,3 +219,34 @@ class ROCEstimator:
                 return live_pts[i + 1] - (target_apcer - attack_pts[i + 1]) * \
                        (live_pts[i + 1] - live_pts[i]) / (attack_pts[i] - attack_pts[i + 1])
         return live_pts[len(live_pts) - 1]
+
+
+def read_img_as_torch_tensor(filename, size, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], swap_rb=True):
+    mat = cv2.imread(filename, cv2.IMREAD_COLOR)
+    assert (mat.shape[0] == size[0] and mat.shape[1] == size[1]), "sizes missmatch"
+    return torch.from_numpy(image2tensor(mat, mean=mean, std=std, swap_red_blue=swap_rb))
+
+
+def check_absolute_difference(t1: torch.Tensor, t2: torch.Tensor, eps: float = 1.0E-6):
+    diff = torch.abs(t1 - t2).sum().item()
+    return diff < eps
+
+
+def benchmark_inference(model, device, input_tensor_shape, warmup_iters, work_iters, about=''):
+    print(f"benchmarking model: {about}")
+    model.to(torch.device(device))
+    print(f" - device: {device}")
+    tmp = torch.randn(size=input_tensor_shape).to(device)
+    print(f" - input shape: {input_tensor_shape}")
+    print(f" - warmup iterations: {warmup_iters}")
+    print(f" - work iterations: {work_iters}")
+    with torch.no_grad():
+        for i in range(warmup_iters):
+            model(tmp)
+        accum = []
+        for i in range(work_iters):
+            t0 = perf_counter()
+            model(tmp)
+            accum.append(perf_counter() - t0)
+        accum = torch.Tensor(accum)
+    print(f" - duration (95 %): {1000.0*accum.mean().item():.2f} ± {2*1000.0*accum.std().item():.2f} ms")
