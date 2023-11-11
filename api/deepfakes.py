@@ -46,7 +46,7 @@ class FaceVideoProcessor:
         scores = []
         with torch.no_grad():
             for model in self.sequence_models:
-                prediction = model(sequences).nan_to_num(0.0)  # very rear we could get nan
+                prediction = model(sequences)
                 scores.append(prediction.mean(dim=0)[1].item())
         return np.array(scores).mean().item()
 
@@ -96,9 +96,11 @@ class AlignedCropsProcessor(FaceVideoProcessor):
         tensors = torch.from_numpy(np.stack(tensors))  # frames x channels x heights x width
 
         if tensors.shape[0] < self.sequence_length:
+            sequence = tensors
+            while sequence.shape[0] < self.sequence_length:
+                sequence = torch.cat([tensors, tensors[(tensors.shape[0] - self.sequence_length):]])
             sequences = torch.empty(size=(1, self.sequence_length, 3, self.height, self.width))
-            while sequences[0].shape[0] < self.sequence_length:
-                sequences[0] = torch.cat([tensors, tensors[(tensors.shape[0] - self.sequence_length):]])
+            sequences[0] = sequence
         else:
             step = tensors.shape[0] // self.sequence_length
             torch.manual_seed(12112023)

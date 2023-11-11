@@ -12,6 +12,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.cuda import amp
 from encoder import EncoderNet
 from copy import deepcopy
+import resnet
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -23,14 +24,14 @@ cfg = edict()
 cfg.train_in_fp16 = True
 cfg.crop_size = (256, 256)
 cfg.sequence_length = 10  # samples to be selected per sequence
-cfg.batch_size = 6       # sequences to be selected in minibatch
+cfg.batch_size = 10       # sequences to be selected in minibatch
 cfg.grad_accum_batches = 16
 cfg.num_epochs = 32
 cfg.num_classes = 2
 cfg.augment = True
-cfg.backbone_name = "resnext50"
+cfg.backbone_name = "resnet18-ir"
 cfg.labels_smoothing = 0.1
-cfg.max_batches_per_train_epoch = 32 # -1 - use all batches
+cfg.max_batches_per_train_epoch = 256 # -1 - use all batches
 crop_format = '256x60x0.1' if cfg.crop_size[0] == 256 else '224x90x0.2'
 local_path = f"/home/alex/Fastdata/deepfakes/sequence/{crop_format}"
 
@@ -48,6 +49,11 @@ if cfg.backbone_name == "effnet_v2_s":
     backbone.load_state_dict(torch.load(backbone_weights).state_dict())
     singleshot = deepcopy(backbone)  # we need copy with last layer to perform naive averaging test
     backbone.classifier[1] = nn.Identity()
+if cfg.backbone_name == "resnet18-ir":
+    backbone = model = resnet.ResNetFaceGray(block=resnet.IRBlock, layers=[2, 2, 2, 2], use_se=True, attention=False,
+                                             output_features=cfg.num_classes)
+    singleshot = deepcopy(backbone)  # we need copy with last layer to perform naive averaging test
+    backbone.bn6 = nn.Identity()
 elif cfg.backbone_name == "resnext50":
     backbone = torch.load(backbone_weights)
     singleshot = deepcopy(backbone)  # we need copy with last layer to perform naive averaging test
@@ -62,7 +68,7 @@ print(f" - backbone size: {model_size_mb(backbone):.3f} MB")
 
 # -------- SEQUENCE PROCESSING DNN ------------
 
-model = EncoderNet(d_model=2048, num_heads=16, num_layers=1, d_ff=128, dropout_l=0.1, dropout=0.1,
+model = EncoderNet(d_model=512, num_heads=8, num_layers=1, d_ff=128, dropout_l=0.1, dropout=0.1,
                    num_classes=cfg.num_classes, max_seq_length=cfg.sequence_length)
 model = model.to(device)
 

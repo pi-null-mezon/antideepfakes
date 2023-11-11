@@ -1,7 +1,7 @@
 Deepfake detection tool 
 ===
 
-SystemFailure solution for challenge'2023
+SystemFailure© solution for challenge'2023
 
 ![](./figures/logo.png)
 
