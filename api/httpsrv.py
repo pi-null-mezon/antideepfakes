@@ -34,13 +34,16 @@ assert max_sequences > 0
 strobe = int(os.getenv("VIDEO_STROBE", 5))
 assert strobe > 0
 
+fd_isize = int(os.getenv("FACE_DETECTOR_INPUT_SIZE", 150))
+assert fd_isize > 71
+
 fd, ld, dds = None, None, None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global fd
-    fd = YuNetFaceDetector("./weights/final/fd.onnx")
+    fd = YuNetFaceDetector("./weights/final/fd.onnx", fd_isize)
     global ld
     ld = LWADetector("./weights/final/ld.onnx")
     global dds
@@ -122,50 +125,51 @@ async def get_status():
           summary="проверить видео")
 async def process(request: Request,
                   bio_sample: UploadFile = File(None, description="файл для проверки [mp4, webm, avi, mov]"),
-                  metadata: UploadFile = File(None, description="метаданные [json]")):
+                  metadata: Optional[UploadFile] = File(None, description="метаданные согласно МР ЕБС [json]")):
     if 'multipart/form-data' not in request.headers['content-type']:
         print("Wrong content-type", flush=True)
         error = 'content type'
         return JSONResponse(status_code=EBS[error]['http'],
                             content={"code": EBS[error]['code'], "message": EBS[error]['message']})
-        # metadata parsing
-    if 'application/json' not in metadata.content_type:
-        print("Wrong metadata content-type'", flush=True)
-        error = 'content'
-        return JSONResponse(status_code=EBS[error]['http'],
-                            content={"code": EBS[error]['code'], "message": EBS[error]['message']})
-    metadata = await metadata.read()
-    json_metadata = json.loads(metadata)
-    if "mnemonic" not in json_metadata:
-        print("metadata does not contain 'mnemonic'", flush=True)
-        error = 'mnemonic'
-        return JSONResponse(status_code=EBS[error]['http'],
-                            content={"code": EBS[error]['code'], "message": EBS[error]['message']})
-    if json_metadata["mnemonic"] != "passive-instructions":
-        print("Only 'passive-instructions' mnemonic allowed", flush=True)
-        error = 'content'
-        return JSONResponse(status_code=EBS[error]['http'],
-                            content={"code": EBS[error]['code'], "message": EBS[error]['message']})
-    if "actions" not in json_metadata:
-        print("Metadata does not contain 'actions'", flush=True)
-        error = 'mnemonic'
-        return JSONResponse(status_code=EBS[error]['http'],
-                            content={"code": EBS[error]['code'], "message": EBS[error]['message']})
-    if len(json_metadata["actions"]) != 1:
-        print("Length of 'actions' more than one", flush=True)
-        error = 'content'
-        return JSONResponse(status_code=EBS[error]['http'],
-                            content={"code": EBS[error]['code'], "message": EBS[error]['message']})
-    if "type" not in json_metadata["actions"][0]:
-        print("'actions' does not contain type field", flush=True)
-        error = 'mnemonic'
-        return JSONResponse(status_code=EBS[error]['http'],
-                            content={"code": EBS[error]['code'], "message": EBS[error]['message']})
-    if json_metadata["actions"][0]["type"] != "deepfake-type":
-        print("'actions' does not contain 'deepfake-type' items", flush=True)
-        error = 'content'
-        return JSONResponse(status_code=EBS[error]['http'],
-                            content={"code": EBS[error]['code'], "message": EBS[error]['message']})
+    # metadata parsing
+    if metadata is not None:
+        if 'application/json' not in metadata.content_type:
+            print("Wrong metadata content-type'", flush=True)
+            error = 'content'
+            return JSONResponse(status_code=EBS[error]['http'],
+                                content={"code": EBS[error]['code'], "message": EBS[error]['message']})
+        metadata = await metadata.read()
+        json_metadata = json.loads(metadata)
+        if "mnemonic" not in json_metadata:
+            print("metadata does not contain 'mnemonic'", flush=True)
+            error = 'mnemonic'
+            return JSONResponse(status_code=EBS[error]['http'],
+                                content={"code": EBS[error]['code'], "message": EBS[error]['message']})
+        if json_metadata["mnemonic"] != "passive-instructions":
+            print("Only 'passive-instructions' mnemonic allowed", flush=True)
+            error = 'content'
+            return JSONResponse(status_code=EBS[error]['http'],
+                                content={"code": EBS[error]['code'], "message": EBS[error]['message']})
+        if "actions" not in json_metadata:
+            print("Metadata does not contain 'actions'", flush=True)
+            error = 'mnemonic'
+            return JSONResponse(status_code=EBS[error]['http'],
+                                content={"code": EBS[error]['code'], "message": EBS[error]['message']})
+        if len(json_metadata["actions"]) != 1:
+            print("Length of 'actions' more than one", flush=True)
+            error = 'content'
+            return JSONResponse(status_code=EBS[error]['http'],
+                                content={"code": EBS[error]['code'], "message": EBS[error]['message']})
+        if "type" not in json_metadata["actions"][0]:
+            print("'actions' does not contain type field", flush=True)
+            error = 'mnemonic'
+            return JSONResponse(status_code=EBS[error]['http'],
+                                content={"code": EBS[error]['code'], "message": EBS[error]['message']})
+        if json_metadata["actions"][0]["type"] != "deepfake-type":
+            print("'actions' does not contain 'deepfake-type' items", flush=True)
+            error = 'content'
+            return JSONResponse(status_code=EBS[error]['http'],
+                                content={"code": EBS[error]['code'], "message": EBS[error]['message']})
     # bio_sample processing
     if bio_sample.content_type not in ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo']:
         print(f"Wrong metadata content-type '{bio_sample.content_type}'", flush=True)
@@ -232,6 +236,7 @@ if __name__ == '__main__':
     print(f"  - workers: {workers}", flush=True)
     print(f"  - video strobe: {strobe}", flush=True)
     print(f"  - max sequences: {max_sequences}", flush=True)
+    print(f"  - face detector input size: {fd_isize}", flush=True)
     print(f"  - double resolutions check: {double_res_check}", flush=True)
     print(f"  - inference device: '{device}'", flush=True)
     uvicorn.run('httpsrv:app', host=http_srv_addr, port=http_srv_port, workers=workers)

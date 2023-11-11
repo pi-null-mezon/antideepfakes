@@ -1,7 +1,7 @@
 scripts-deepfake-detection-tool
 ===
 
-Simple script to enroll local video files:
+Simple script to enroll local video files by means of API instance
 
 ```bash
 pip install -r requirements.txt && \

@@ -36,6 +36,7 @@ Control server performance via environment variables:
  - VIDEO_STROBE - video strobe for video decoding (default: 5)
  - MAX_SEQUENCES - how often deepfake detection should be performed (default: 4)  
  - DOUBLE_RES_CHECK - deepfake detection results will be refined on two input resolutions if enabled (default: False)
+ - FACE_DETECTOR_INPUT_SIZE - bigger values allow to detect smaller faces (default: 150)
 
 ## API
 

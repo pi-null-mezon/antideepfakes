@@ -52,3 +52,8 @@ NAIVE AVERAGING TEST for sequence length: 10 frames + effnet_v2_s@224x90x0.2.jit
  - BPCER@0.01: 0.7503
  - BPCER@0.001: 0.8886
 
+NAIVE AVERAGING TEST for seq.length 10 + resnext50.pth:
+ - EER: 0.0979 (score: 0.3560)
+ - BPCER@0.1: 0.0972
+ - BPCER@0.01: 0.4877
+ - BPCER@0.001: 0.9770

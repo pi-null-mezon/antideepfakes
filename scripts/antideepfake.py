@@ -47,7 +47,8 @@ async def main():
                 await asyncio.gather(*tasks)
                 for i in range(calls):
                     http_status, json_reply = tasks[i].result()
-                    line = f"\n{files_list[tasks_finished + i]}, {http_status}, {json.dumps(json_reply, separators=(',',':'))}"
+                    line = f"\n{files_list[tasks_finished + i]}, {http_status}, " \
+                           f"{json.dumps(json_reply, separators=(',',':'), ensure_ascii=False)}"
                     csv.write(line)
                     csv.flush()
             progress_bar.update(calls)
