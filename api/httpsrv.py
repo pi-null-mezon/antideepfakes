@@ -42,8 +42,8 @@ EBS = {
 }
 
 class HealthModel(BaseModel):
-    status: int = Field(default=0, description="0 - исправен, !=0 - неисправен")
-    message: Optional[str] = Field(description="справочная информация по статусу", default='')
+    status: int = Field(default=0, description="0 - исправен, > 0 - неисправен")
+    message: Optional[str] = Field(description="справочная информация", default='')
 
 
 class ErrorModel(BaseModel):
@@ -74,35 +74,34 @@ async def startup_event():
         DD256x60x01([
             './weights/final/256x60x0.1/tmp_dd_on_effnet_v2_s@256x60x0.1.jit',
         ], device),
-        #DD224x90x02([
-        #    './weights/final/224x90x0.2/tmp_dd_on_effnet_v2_s@224x90x0.2.jit',
-        #], device)
     ]
+    if os.getenv('DOUBLE_CHECK', False):
+        deepfake_detectors.append([
+            DD224x90x02([
+                './weights/final/224x90x0.2/tmp_dd_on_effnet_v2_s@224x90x0.2.jit',
+            ], device)
+        ])
     print("  - warming up nets, please wait...")
-    liveness_score('./resources/fake.mp4', deepfake_detectors, face_detector, landmarks_detector, delete_file=False)
+    for i in range(5):  # several iteration is needed to optimize CUDA calls
+        liveness_score('./resources/fake.mp4', deepfake_detectors, face_detector, landmarks_detector, delete_file=False)
 
-''''@app.get(f"{prefix}/health",
+
+@app.get(f"{prefix}/health",
          response_class=JSONResponse,
          tags=["ЕБС"],
          response_model=HealthModel,
          responses={500: {"model": ErrorModel}},
          summary="провести автодиагностику")
 async def get_status():
-    img = cv2.imread("./resources/live.jpg", cv2.IMREAD_COLOR)
-    list_of_landmarks = face_detector.detect(img)
-    if len(list_of_landmarks) != 1:
-        return {"status": 3, "message": "БП обнаружения витальности неработоспособен"}
-    live_liveness_score = face.liveness_score(liveness_classifiers, img, list_of_landmarks[0])
-    print(f"live sample liveness_score: {live_liveness_score}")
-    img = cv2.imread("./resources/replay.jpg", cv2.IMREAD_COLOR)
-    list_of_landmarks = face_detector.detect(img)
-    if len(list_of_landmarks) != 1:
-        return {"status": 3, "message": "БП обнаружения витальности неработоспособен"}
-    replay_liveness_score = face.liveness_score(liveness_classifiers, img, list_of_landmarks[0])
-    print(f"attack sample liveness_score: {replay_liveness_score}")
-    if replay_liveness_score > live_liveness_score:
-        return {"status": 3, "message": "БП обнаружения витальности неработоспособен"}
-    return {"status": 0}'''
+    live = liveness_score("./resources/live.mp4",
+                          deepfake_detectors, face_detector, landmarks_detector, delete_file=False)
+    print(f"live sample liveness score: {live:.3f}")
+    fake = liveness_score("./resources/fake.mp4",
+                          deepfake_detectors, face_detector, landmarks_detector, delete_file=False)
+    print(f"deepfake sample liveness score: {fake:.3f}")
+    if fake > live:
+        return {"status": 1, "message": "Биопроцессор неисправен!"}
+    return {"status": 0, "message": "Биопроцессор исправен"}
 
 
 @app.post(f"{prefix}/detect",
@@ -110,7 +109,7 @@ async def get_status():
           tags=["ЕБС"],
           response_model=LivenessModel,
           responses={400: {"model": ErrorModel}},
-          summary="провести проверку видео")
+          summary="проверить видео")
 async def process(request: Request,
                   bio_sample: UploadFile = File(None, description="файл для проверки [mp4, webm]"),
                   metadata: UploadFile = File(None, description="метаданные [json]")):
@@ -220,4 +219,5 @@ if __name__ == '__main__':
     workers = int(os.getenv("WORKERS", 1))
     print(f"  - prefix: '{prefix}'", flush=True)
     print(f"  - workers: {workers}", flush=True)
+    print(f"  - double check: {os.getenv('DOUBLE_CHECK', False)}", flush=True)
     uvicorn.run('httpsrv:app', host=http_srv_addr, port=http_srv_port, workers=workers)

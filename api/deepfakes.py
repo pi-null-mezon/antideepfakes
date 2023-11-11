@@ -70,6 +70,7 @@ class AlignedCropsProcessor(FaceVideoProcessor):
 
     def prepare_input_batch(self, video: VideoFileSource, fdet: FaceDetector, ldet: LWADetector):
         crops = []
+        video.set_strobe(self.strobe)
         while True:
             try:
                 name, frame = video.next()
@@ -95,8 +96,8 @@ class AlignedCropsProcessor(FaceVideoProcessor):
             tensors.append(image2tensor(crop, self.mean, self.std, self.swap_red_blue))
         tensors = torch.from_numpy(np.stack(tensors))  # frames x channels x heights x width
 
-        possible_series = (tensors.shape[0] - self.strobe) // self.sequence_length
-        if possible_series <= 1:
+        step = tensors.shape[0] // self.sequence_length
+        if step <= 1:
             if tensors.shape[0] < self.sequence_length:
                 seria = torch.empty(size=(self.sequence_length, 3, self.height, self.width))
                 for i in range(tensors.shape[0]):
@@ -104,14 +105,13 @@ class AlignedCropsProcessor(FaceVideoProcessor):
                 for i in range(tensors.shape[0], self.sequence_length):
                     seria[i] = tensors[-1]
             else:
-                step = tensors.shape[0] // self.sequence_length
                 seria = tensors[0::step][:self.sequence_length]
             seria = seria.unsqueeze(0)  # add batch dimension
         else:
-            step = tensors.shape[0] // self.sequence_length
+            torch.manual_seed(12112023)
             seria = torch.empty(size=(min(4, step), self.sequence_length, 3, self.height, self.width))
             for i in range(seria.shape[0]):
-                seria[i] = tensors[i + torch.randint(0, step, (1,))::step][:self.sequence_length]
+                seria[i] = tensors[i + torch.randint(1, step, (1,))::step][:self.sequence_length]
         return seria.to(self.device)
 
 
@@ -120,7 +120,7 @@ class DD256x60x01(AlignedCropsProcessor):
         AlignedCropsProcessor.__init__(self, width=256, height=256, eyes_dst=60.0, rotate=True, v2hshift=-0.1,
                                        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225],
                                        interp=cv2.INTER_LINEAR, swap_red_blue=True,
-                                       strobe=17, sequence_length=10,
+                                       strobe=5, sequence_length=10,
                                        device=device)
         self.sequence_models = []
         for filename in filenames:
@@ -134,7 +134,7 @@ class DD224x90x02(AlignedCropsProcessor):
         AlignedCropsProcessor.__init__(self, width=224, height=224, eyes_dst=90.0, rotate=True, v2hshift=-0.2,
                                        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225],
                                        interp=cv2.INTER_LINEAR, swap_red_blue=True,
-                                       strobe=17, sequence_length=10,
+                                       strobe=5, sequence_length=10,
                                        device=device)
         self.sequence_models = []
         for filename in filenames:

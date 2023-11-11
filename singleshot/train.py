@@ -122,7 +122,7 @@ def update_metrics(mode, epoch, running_loss, roc_estimator):
     if eer < metrics[mode]['EER']:
         metrics[mode]['EER'] = eer
         if mode == 'test':
-            torch.save(model, f"./weights/tmp_{cfg.backbone_name}@{crop_format}.pth")
+            torch.save(model, f"./weights/tmp_{cfg.model_name}@{crop_format}.pth")
         print(f" - EER: {eer:.4f} (score: {err_s:.3f}) - improvement")
     else:
         print(f" - EER: {eer:.4f} (score: {err_s:.3f})")
