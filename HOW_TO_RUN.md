@@ -1,32 +1,34 @@
 SystemFailure© API-deepfake-detection-tool
 ===
 
-HTTP server for deepfake challenge. Supports inference on x86_64 CPUs and Nvidia CUDA GPUS. 
+HTTP server for deepfake challenge
 
-Installation:
+input: video with face >> output: video liveness score
+
+Supports inference on x86_64 CPUs and Nvidia CUDA GPUS 
+
+## Installation:
 
 ```bash
 unzip systemfailure-deepfake_detection_tool.zip && \
 docker load -i systemfailure-deepfake_detection_tool-v1.0.0.tar.gz
 ```
 
-Run as docker container:
+## Run
+
+As docker container:
 
 ```bash
 docker run -p 8080:5000 -e PATH_PREFIX=face --gpus all systemfailure/ddt
 ```
 
-Or run as docker composition:
+As docker composition:
 
 ```bash
 docker-compose up
 ```
 
-Check out API:
-
-```
-go to http://localhost:5000/docs
-```
+### Options
 
 Control server performance via environment variables:
 
@@ -34,5 +36,16 @@ Control server performance via environment variables:
  - VIDEO_STROBE - video strobe for video decoding (default: 5)
  - MAX_SEQUENCES - how often deepfake detection should be performed (default: 4)  
  - DOUBLE_RES_CHECK - deepfake detection results will be refined on two input resolutions if enabled (default: False)
+
+## API
+
+```
+go to http://localhost:5000/docs
+```
+
+### Scripts
+
+Includes [scripts](./scripts/README.md) to process local directories: *./scripts*
+
 
 *designed by Alex.A.Taranov, november 2023, SystemFailure©*
