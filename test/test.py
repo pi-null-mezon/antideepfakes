@@ -6,7 +6,7 @@ from tqdm import tqdm
 import sys
 
 cfg = EasyDict()
-cfg.train_in_fp16 = True
+cfg.check_in_fp16 = True
 cfg.crop_size = (256, 256)
 cfg.sequence_length = 10  # samples to be selected per sequence
 cfg.batch_size = 32  # sequences to be selected in minibatch
@@ -26,12 +26,18 @@ for key in cfg:
 singleshot_model = torch.load(f'./weights/{cfg.backbone_name}@{crop_format}.pth').to(device)
 if cfg.backbone_name == "effnet_v2_s":
     singleshot_model.classifier.append(torch.nn.Softmax(dim=1))
+if cfg.check_in_fp16:
+    singleshot_model.half()
 singleshot_model.eval()
 
 traced_singleshot_model = torch.jit.load(f'./weights/tmp_{cfg.backbone_name}@{crop_format}.jit').to(device)
+if cfg.check_in_fp16:
+    traced_singleshot_model.half()
 traced_singleshot_model.eval()
 
 sequence_model = torch.jit.load(f'./weights/tmp_dd_on_{cfg.backbone_name}@{crop_format}.jit').to(device)
+if cfg.check_in_fp16:
+    sequence_model.half()
 sequence_model.eval()
 
 # ---------------------------------
@@ -56,6 +62,8 @@ def test_naive_averaging_singleshot(dataloader, singleshot, info):
     with torch.no_grad():
         for batch_idx, (inputs, labels) in enumerate(tqdm(dataloader, file=sys.stdout)):
             inputs = inputs.to(device)
+            if cfg.check_in_fp16:
+                inputs = inputs.half()
             labels = labels.to(device)
             inputs = inputs.view(-1, inputs.shape[-3], inputs.shape[-2], inputs.shape[-1])
             scores = singleshot(inputs).view(cfg.batch_size, cfg.sequence_length, -1)
@@ -75,6 +83,8 @@ def test_sequence_processor(dataloader, processor, info):
     with torch.no_grad():
         for batch_idx, (inputs, labels) in enumerate(tqdm(dataloader, file=sys.stdout)):
             inputs = inputs.to(device)
+            if cfg.check_in_fp16:
+                inputs = inputs.half()
             labels = labels.to(device)
             scores = processor(inputs)[:, alive_lbl]
             test_roc_est.update(live_scores=scores[labels == alive_lbl].tolist(),
@@ -85,8 +95,13 @@ def test_sequence_processor(dataloader, processor, info):
     print(f" - BPCER@0.01: {test_roc_est.estimate_bpcer(target_apcer=0.01):.4f}")
     print(f" - BPCER@0.001: {test_roc_est.estimate_bpcer(target_apcer=0.001):.4f}")
 
-info = f"sequence length: {cfg.sequence_length} frames + "
 
-test_sequence_processor(dataloader=test_dataloader, processor=sequence_model, info=info + f"encoder@{cfg.backbone_name}@{crop_format}.jit")
-#test_naive_averaging_singleshot(dataloader=test_dataloader, singleshot=singleshot_model, info=info + f"{cfg.backbone_name}@{crop_format}.pth")
-test_naive_averaging_singleshot(dataloader=test_dataloader, singleshot=traced_singleshot_model, info=info + f"{cfg.backbone_name}@{crop_format}.jit")
+info = f"precision: {'fp16' if cfg.check_in_fp16 else 'fp32'}, seq.length: {cfg.sequence_length} frames, "
+
+test_sequence_processor(dataloader=test_dataloader, processor=sequence_model,
+                        info=info + f"encoder@{cfg.backbone_name}@{crop_format}.jit")
+
+# test_naive_averaging_singleshot(dataloader=test_dataloader, singleshot=singleshot_model, info=info + f"{cfg.backbone_name}@{crop_format}.pth")
+
+test_naive_averaging_singleshot(dataloader=test_dataloader, singleshot=traced_singleshot_model,
+                                info=info + f"{cfg.backbone_name}@{crop_format}.jit")

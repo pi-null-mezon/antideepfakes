@@ -1,13 +1,15 @@
-version: "3.9"  
-networks:
-  net:
-    driver: overlay
+version: "3.9"
+
 services:
-  bisolut-liveness-face:
-    image: ${REGISTRY_URl}/${VENDOR}/${APP1_IMAGE}:${APP1_TAG}
+  systemfailure-deefake-detection-api:
+    #image: ${REGISTRY_URl}/${VENDOR}/${APP_IMAGE}:${APP_TAG}
+    image: ${VENDOR}/${APP_IMAGE}:${APP_TAG}
     environment:
       - PATH_PREFIX=${PATH_PREFIX}
       - WORKERS=${WORKERS}
+      - VIDEO_STROBE=${VIDEO_STROBE}
+      - MAX_SEQUENCES=${MAX_SEQUENCES}
+      - DOUBLE_RES_CHECK=${DOUBLE_RES_CHECK}
       - LOG_MAX_SIZE=${LOG_MAX_SIZE}
       - LOG_MAX_FILE=${LOG_MAX_FILE}
     logging:

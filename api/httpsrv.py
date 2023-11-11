@@ -1,13 +1,13 @@
 # -----------------------------------------------------------------
-# Http server for the face liveness detection
-#
-# (C) 2021 Alex A. Taranov, Moscow, Russia, taransanya@pi-mezon.ru
+# Http server for the face video deepfakes detection
+# 2023, SystemFailure©, Moscow, Russia, pi-null-mezon@yandex.ru
 # -----------------------------------------------------------------
 
 import os
 import json
 import uuid
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, UploadFile, File, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -19,14 +19,55 @@ from deepfakes import DD256x60x01, DD224x90x02, liveness_score
 from face import YuNetFaceDetector
 from landmarks import LWADetector
 
+fastapi_root_path = os.getenv('FASTAPI_ROOT_PATH', '')  # set right location if you want to see docs over proxy
+
 path = os.getenv('PATH_PREFIX', '')
 prefix = f"/v1/{path}/liveness" if path != '' else "/v1/liveness"
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+double_res_check = True if os.getenv("DOUBLE_RES_CHECK", 'False').lower() in ['1', 'true', 'on'] else False
+
+max_sequences = int(os.getenv("MAX_SEQUENCES", 4))
+assert max_sequences > 0
+
+strobe = int(os.getenv("VIDEO_STROBE", 5))
+assert strobe > 0
+
+fd, ld, dds = None, None, None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global fd
+    fd = YuNetFaceDetector("./weights/final/fd.onnx")
+    global ld
+    ld = LWADetector("./weights/final/ld.onnx")
+    global dds
+    dds = [
+        DD256x60x01([
+            './weights/final/256x60x0.1/tmp_dd_on_effnet_v2_s@256x60x0.1.jit',
+        ], device),
+    ]
+    if double_res_check:
+        dds.append(
+            DD224x90x02([
+                './weights/final/224x90x0.2/tmp_dd_on_effnet_v2_s@224x90x0.2.jit',
+            ], device)
+        )
+    # warm up pipeline
+    for i in range(5):  # several iteration is needed to optimize CUDA calls
+        liveness_score('./resources/fake.mp4', dds, fd, ld, strobe, max_sequences, delete_file=False)
+    yield
+
 
 app = FastAPI(
     title="SystemFailure's Deepfake Detection HTTP service",
     description="Сервис проверки подлинности видеозаписей лица",
     version="1.0.0",
-    openapi_tags=[{"name": "ЕБС"}]
+    openapi_tags=[{"name": "ЕБС"}],
+    lifespan=lifespan,
+    root_path=fastapi_root_path
 )
 
 EBS = {
@@ -56,35 +97,6 @@ class LivenessModel(BaseModel):
     score: float = Field(description="степень уверенности в подлинности биометрического предъявления "
                                      "от 0.0 до 1.0 (чем выше, тем выше уверенность)")
 
-face_detector = None
-landmarks_detector = None
-deepfake_detectors = None
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-@app.on_event('startup')
-async def startup_event():
-    print(f"  - inference backend: '{device}'")
-    global face_detector
-    face_detector = YuNetFaceDetector("./weights/final/fd.onnx")
-    global landmarks_detector
-    landmarks_detector = LWADetector("./weights/final/ld.onnx")
-    global deepfake_detectors
-    deepfake_detectors = [
-        DD256x60x01([
-            './weights/final/256x60x0.1/tmp_dd_on_effnet_v2_s@256x60x0.1.jit',
-        ], device),
-    ]
-    if os.getenv('DOUBLE_CHECK', False):
-        deepfake_detectors.append([
-            DD224x90x02([
-                './weights/final/224x90x0.2/tmp_dd_on_effnet_v2_s@224x90x0.2.jit',
-            ], device)
-        ])
-    print("  - warming up nets, please wait...")
-    for i in range(5):  # several iteration is needed to optimize CUDA calls
-        liveness_score('./resources/fake.mp4', deepfake_detectors, face_detector, landmarks_detector, delete_file=False)
-
 
 @app.get(f"{prefix}/health",
          response_class=JSONResponse,
@@ -93,12 +105,10 @@ async def startup_event():
          responses={500: {"model": ErrorModel}},
          summary="провести автодиагностику")
 async def get_status():
-    live = liveness_score("./resources/live.mp4",
-                          deepfake_detectors, face_detector, landmarks_detector, delete_file=False)
-    print(f"live sample liveness score: {live:.3f}")
-    fake = liveness_score("./resources/fake.mp4",
-                          deepfake_detectors, face_detector, landmarks_detector, delete_file=False)
-    print(f"deepfake sample liveness score: {fake:.3f}")
+    live = liveness_score("./resources/live.mp4", dds, fd, ld, strobe=5, max_sequences=4, delete_file=False)
+    # print(f"live sample liveness score: {live:.3f}")
+    fake = liveness_score("./resources/fake.mp4", dds, fd, ld, strobe=5, max_sequences=4, delete_file=False)
+    # print(f"deepfake sample liveness score: {fake:.3f}")
     if fake > live:
         return {"status": 1, "message": "Биопроцессор неисправен!"}
     return {"status": 0, "message": "Биопроцессор исправен"}
@@ -111,7 +121,7 @@ async def get_status():
           responses={400: {"model": ErrorModel}},
           summary="проверить видео")
 async def process(request: Request,
-                  bio_sample: UploadFile = File(None, description="файл для проверки [mp4, webm]"),
+                  bio_sample: UploadFile = File(None, description="файл для проверки [mp4, webm, avi, mov]"),
                   metadata: UploadFile = File(None, description="метаданные [json]")):
     if 'multipart/form-data' not in request.headers['content-type']:
         print("Wrong content-type", flush=True)
@@ -157,8 +167,8 @@ async def process(request: Request,
         return JSONResponse(status_code=EBS[error]['http'],
                             content={"code": EBS[error]['code'], "message": EBS[error]['message']})
     # bio_sample processing
-    if bio_sample.content_type not in ['video/mp4', 'video/webm']:
-        print("Wrong metadata content-type'", flush=True)
+    if bio_sample.content_type not in ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo']:
+        print(f"Wrong metadata content-type '{bio_sample.content_type}'", flush=True)
         error = 'content'
         return JSONResponse(status_code=EBS[error]['http'],
                             content={"code": EBS[error]['code'], "message": EBS[error]['message']})
@@ -173,7 +183,7 @@ async def process(request: Request,
         o_f.write(bio_sample_bytes)
 
     try:
-        score = liveness_score(video_filename, deepfake_detectors, face_detector, landmarks_detector, delete_file=True)
+        score = liveness_score(video_filename, dds, fd, ld, strobe, max_sequences, delete_file=True)
     except IOError as ex:
         print("Can not decode bio_sample", flush=True)
         error = 'sample read'
@@ -205,7 +215,7 @@ async def dummy_process():
 
 
 if __name__ == '__main__':
-    server_name = 'SystemFailure©: Deepfake Detection HTTP service'
+    server_name = 'SystemFailure© Deepfake Detection HTTP service'
     print('=' * len(server_name), flush=True)
     print(server_name, flush=True)
     print('=' * len(server_name), flush=True)
@@ -217,7 +227,11 @@ if __name__ == '__main__':
     http_srv_addr = os.getenv("APP_ADDR", "0.0.0.0")
     http_srv_port = int(os.getenv("APP_PORT", 5000))
     workers = int(os.getenv("WORKERS", 1))
+    print(f"  - fastapi root path: '{fastapi_root_path}'", flush=True)
     print(f"  - prefix: '{prefix}'", flush=True)
     print(f"  - workers: {workers}", flush=True)
-    print(f"  - double check: {os.getenv('DOUBLE_CHECK', False)}", flush=True)
+    print(f"  - video strobe: {strobe}", flush=True)
+    print(f"  - max sequences: {max_sequences}", flush=True)
+    print(f"  - double resolutions check: {double_res_check}", flush=True)
+    print(f"  - inference device: '{device}'", flush=True)
     uvicorn.run('httpsrv:app', host=http_srv_addr, port=http_srv_port, workers=workers)

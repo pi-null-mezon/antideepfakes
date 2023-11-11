@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.4.0-runtime
+FROM nvidia/cuda:11.4.3-runtime-ubuntu20.04
 
 EXPOSE 5000
 
@@ -15,9 +15,9 @@ RUN apt-get update && apt-get install -y locales && rm -rf /var/lib/apt/lists/* 
 ENV LANG en_US.UTF-8
 ENV DEBIAN_FRONTEND=noninteractive
 
-COPY / /usr/local/bin
-COPY ../weights/final /usr/local/bin/weights/final
-COPY ../resources /usr/local/bin/resources
+COPY ./api /usr/local/bin
+COPY ./weights/final /usr/local/bin/weights/final
+COPY ./resources /usr/local/bin/resources
 
 # Install dependencies
 RUN apt-get update && \

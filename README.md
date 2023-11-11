@@ -19,6 +19,8 @@ SystemFailure solution for challenge'2023
 
 - [API](./api) - API and docker files to build stand-alone service
 
+- [scripts](./scripts) - scripts for the supervisors (to process local folder via API)
+
 ---
 
-*designed by Alex.A.Taranov, november 2023*
+*designed by SystemFailure©, november 2023*
