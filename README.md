@@ -7,7 +7,7 @@ SystemFailure© solution for challenge'2023
 
 ## Architecture
 
-> ADD PICTURE
+![](./figures/antideepfake.png)
 
 ---
 
