@@ -96,11 +96,10 @@ class AlignedCropsProcessor(FaceVideoProcessor):
         tensors = torch.from_numpy(np.stack(tensors))  # frames x channels x heights x width
 
         if tensors.shape[0] < self.sequence_length:
-            sequence = tensors
-            while sequence.shape[0] < self.sequence_length:
-                sequence = torch.cat([tensors, tensors[(tensors.shape[0] - self.sequence_length):]])
+            while tensors.shape[0] < self.sequence_length:
+                tensors = torch.cat([tensors, tensors[(tensors.shape[0] - self.sequence_length):]])
             sequences = torch.empty(size=(1, self.sequence_length, 3, self.height, self.width))
-            sequences[0] = sequence
+            sequences[0] = tensors
         else:
             step = tensors.shape[0] // self.sequence_length
             torch.manual_seed(12112023)
