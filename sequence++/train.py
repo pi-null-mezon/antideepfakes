@@ -49,15 +49,18 @@ if cfg.backbone_name == "effnet_v2_s":
     backbone.load_state_dict(torch.load(backbone_weights).state_dict())
     singleshot = deepcopy(backbone)  # we need copy with last layer to perform naive averaging test
     backbone.classifier[1] = nn.Identity()
+    features_size = 1280
 elif cfg.backbone_name == "resnet18-ir":
     backbone = model = resnet.ResNetFaceGray(block=resnet.IRBlock, layers=[2, 2, 2, 2], use_se=True, attention=False,
                                              output_features=cfg.num_classes)
     singleshot = deepcopy(backbone)  # we need copy with last layer to perform naive averaging test
     backbone.bn6 = nn.Identity()
+    features_size = 512
 elif cfg.backbone_name == "resnext50":
     backbone = torch.load(backbone_weights)
     singleshot = deepcopy(backbone)  # we need copy with last layer to perform naive averaging test
     backbone.fc = torch.nn.Identity()
+    features_size = 2048
 else:
     raise NotImplementedError
 
@@ -68,7 +71,7 @@ print(f" - backbone size: {model_size_mb(backbone):.3f} MB")
 
 # -------- SEQUENCE PROCESSING DNN ------------
 
-model = EncoderNet(d_model=1280, num_heads=8, num_layers=1, d_ff=128, dropout_l=0.1, dropout=0.1,
+model = EncoderNet(d_model=features_size, num_heads=8, num_layers=1, d_ff=128, dropout_l=0.1, dropout=0.1,
                    num_classes=cfg.num_classes, max_seq_length=cfg.sequence_length)
 model = model.to(device)
 

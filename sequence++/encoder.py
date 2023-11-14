@@ -114,9 +114,9 @@ class EncoderNet(nn.Module):
 
     def forward(self, x):
         # dimensions of x: batch_size, sequence_length, features_size
+        x = self.positional_encoding(x)
         for layer in self.layers:
             x = layer(x)
-        x = self.positional_encoding(x)
         x = self.dropout(x)
         x = self.fc(x)
         x = torch.mean(x, dim=1)  # average across sequence length
