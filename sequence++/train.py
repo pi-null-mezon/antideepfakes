@@ -89,17 +89,10 @@ writer = SummaryWriter(filename_suffix=f'{crop_format}@sequence++')
 
 print("Train dataset:")
 train_dataset = CustomDataSet([
-    f"{local_path}/FaceForensics++",
+    f"{local_path}/roop",
+    f"{local_path}/toloka",
     f"{local_path}/Celeb-DF-v2",
-    f"{local_path}/dfdc/train_part_0",
-    f"{local_path}/dfdc/train_part_1",
-    f"{local_path}/dfdc/train_part_3",
-    f"{local_path}/dfdc/train_part_5",
-    f"{local_path}/dfdc/train_part_07",
-    f"{local_path}/dfdc/train_part_11",
-    f"{local_path}/dfdc/train_part_23",
-    f"{local_path}/dfdc/train_part_43",
-    f"{local_path}/dfdc/train_part_47"
+    f"{local_path}/dfdc"
 ],
     tsize=cfg.crop_size,
     do_aug=cfg.augment,
@@ -123,8 +116,7 @@ for key in train_dataset.labels_names():
 
 print("Test dataset:")
 test_dataset = CustomDataSet([
-    f"{local_path}/dfdc/train_part_17",
-    f"{local_path}/dfdc/train_part_41"
+    f"{local_path}/FaceForensics++",
 ],
     tsize=cfg.crop_size,
     do_aug=False,
@@ -293,7 +285,7 @@ def test_naive_averaging(dataloader):
     print(f" - BPCER@0.001: {test_roc_est.estimate_bpcer(target_apcer=0.001):.4f}")
 
 
-test_naive_averaging(test_dataloader)
+#test_naive_averaging(test_dataloader)
 for epoch in range(cfg.num_epochs):
     train(epoch, train_dataloader)
     test(epoch, test_dataloader)

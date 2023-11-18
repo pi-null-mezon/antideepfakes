@@ -26,12 +26,12 @@ cfg.grad_accum_batches = 4
 cfg.num_epochs = 50
 cfg.num_classes = 2
 cfg.augment = True
-cfg.model_name = "resnet18-ir"
+cfg.model_name = "effnet_v2_s"
 cfg.pretrained = True
-cfg.labels_smoothing = 0.1
+cfg.labels_smoothing = 0.05
 cfg.max_batches_per_train_epoch = -1  # -1 - all
 crop_format = '256x60x0.1' if cfg.crop_size[0] == 256 else '224x90x0.2'
-local_path = f"/home/alex/Fastdata/deepfakes/singleshot/{crop_format}"
+local_path = f"/home/alex/Fastdata/deepfakes/sequence/{crop_format}"
 
 for key in cfg:
     print(f" - {key}: {cfg[key]}")
@@ -44,9 +44,11 @@ if cfg.model_name == "effnet_v2_s":
         model.load_state_dict(torchvision.models.efficientnet_v2_s(
             weights=torchvision.models.EfficientNet_V2_S_Weights.IMAGENET1K_V1).state_dict())
     model.classifier[1] = nn.Linear(in_features=1280, out_features=cfg.num_classes, bias=True)
+    max_lr = 0.001
 elif cfg.model_name == "resnet18-ir":
     model = resnet.ResNetFaceGray(block=resnet.IRBlock, layers=[2, 2, 2, 2], use_se=True, attention=False,
                                   output_features=cfg.num_classes)
+    max_lr = 0.01
 
 model = model.to(device)
 # model = nn.DataParallel(model)
@@ -55,8 +57,8 @@ print(f" - model size: {model_size_mb(model):.3f} MB")
 
 # Loss and optimizer
 loss_fn = nn.CrossEntropyLoss(label_smoothing=cfg.labels_smoothing)
-optimizer = optim.Adam(model.parameters(), lr=0.001)
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2, factor=0.1, min_lr=0.00001,
+optimizer = optim.Adam(model.parameters(), lr=max_lr)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=2, factor=0.2, min_lr=0.0001,
                                                        verbose=True)
 
 # ----------------------------
@@ -65,17 +67,10 @@ writer = SummaryWriter(filename_suffix=cfg.model_name)
 
 print("Train dataset:")
 train_dataset = CustomDataSet([
-    f"{local_path}/FaceForensics++",
+    f"{local_path}/roop",
+    f"{local_path}/toloka",
     f"{local_path}/Celeb-DF-v2",
-    f"{local_path}/dfdc/train_part_0",
-    f"{local_path}/dfdc/train_part_1",
-    f"{local_path}/dfdc/train_part_3",
-    f"{local_path}/dfdc/train_part_5",
-    f"{local_path}/dfdc/train_part_07",
-    f"{local_path}/dfdc/train_part_11",
-    f"{local_path}/dfdc/train_part_23",
-    f"{local_path}/dfdc/train_part_43",
-    f"{local_path}/dfdc/train_part_47"
+    f"{local_path}/dfdc",
 ], cfg.crop_size, do_aug=cfg.augment)
 print(f"  {train_dataset.labels_names()}")
 assert cfg.num_classes == len(train_dataset.labels_names())
@@ -95,8 +90,7 @@ for key in train_dataset.labels_names():
 
 print("Test dataset:")
 test_dataset = CustomDataSet([
-    f"{local_path}/dfdc/train_part_17",
-    f"{local_path}/dfdc/train_part_41",
+    f"{local_path}/FaceForensics++",
 ], cfg.crop_size, do_aug=False)
 print(f"  {test_dataset.labels_names()}")
 print(f"  {dict(Counter(test_dataset.targets))}")
@@ -159,6 +153,8 @@ def train(epoch, dataloader):
             break
         inputs = inputs.to(device)
         labels = labels.to(device)
+        #u,c = torch.unique(labels, return_counts=True)
+        #print(u,c)
         if cfg.train_in_fp16:
             with amp.autocast():
                 outputs = model(inputs)

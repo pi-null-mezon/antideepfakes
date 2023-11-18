@@ -46,10 +46,12 @@ class CustomDataSet(Dataset):
             self.labels_list = [s.name for s in os.scandir(path) if s.is_dir()]
             self.labels_list.sort()
             for i, label in enumerate(self.labels_list):
-                files = [(i, os.path.join(path, label, f.name)) for f in os.scandir(os.path.join(path, label))
-                         if (f.is_file() and ('.jp' in f.name or '.pn' in f.name))]
-                self.samples += files
-                self.targets += [i]*len(files)
+                subpath = os.path.join(path, label)
+                for sequence in [s.name for s in os.scandir(subpath) if s.is_dir()]:
+                    files = [os.path.join(subpath, sequence, f.name) for f in os.scandir(os.path.join(subpath, sequence))
+                              if (f.is_file() and ('.jp' in f.name or '.pn' in f.name))]
+                    self.samples += files
+                    self.targets += [i]*len(files)
         self.album = A.Compose([
             A.RandomBrightnessContrast(p=0.25, brightness_limit=(-0.25, 0.25)),
             A.HorizontalFlip(p=0.5),
@@ -79,7 +81,7 @@ class CustomDataSet(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        filename = self.samples[idx][1]
+        filename = self.samples[idx]
         mat = cv2.imread(filename, cv2.IMREAD_COLOR)
 
         if mat.shape[0] != self.tsize[0] and mat.shape[1] != self.tsize[1]:
@@ -92,7 +94,7 @@ class CustomDataSet(Dataset):
         # Visual control
         # cv2.imshow("probe", mat)
         # cv2.waitKey(0)
-        return torch.from_numpy(image2tensor(mat, mean=self.mean, std=self.std, swap_red_blue=True)), self.samples[idx][0]
+        return torch.from_numpy(image2tensor(mat, mean=self.mean, std=self.std, swap_red_blue=True)), self.targets[idx]
 
 
 class Speedometer:

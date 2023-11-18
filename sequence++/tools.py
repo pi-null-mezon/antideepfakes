@@ -40,6 +40,7 @@ class CustomDataSet(Dataset):
             self.std = std
         self.tsize = tsize
         self.do_aug = do_aug
+        self.min_sequence_length = min_sequence_length
         self.samples = []
         self.targets = []
         for path in paths:
@@ -48,9 +49,9 @@ class CustomDataSet(Dataset):
             for i, label in enumerate(self.labels_list):
                 for subdir in [s.name for s in os.scandir(os.path.join(path, label)) if s.is_dir()]:
                     frames = [os.path.join(path, label, subdir, f.name) for f in os.scandir(os.path.join(path, label, subdir))
-                         if (f.is_file() and ('.jp' in f.name or '.pn' in f.name))]
+                              if (f.is_file() and ('.jp' in f.name or '.pn' in f.name))]
                     if len(frames) >= min_sequence_length:
-                        self.samples.append((i, frames[:min_sequence_length]))
+                        self.samples.append(sorted(frames))
                         self.targets.append(i)
         self.album = A.Compose([
             A.RandomBrightnessContrast(p=0.25, brightness_limit=(-0.25, 0.25)),
@@ -82,7 +83,11 @@ class CustomDataSet(Dataset):
         tensor = []
         mats = {}
         i = 0
-        for filename in sorted(self.samples[idx][1]):
+        sequence = self.samples[idx]
+        shift = len(sequence) - self.min_sequence_length
+        if shift > 0:
+            shift = torch.randint(0, shift, size=(1,)).item()
+        for filename in sequence[shift:shift+self.min_sequence_length]:
             mat = cv2.imread(filename, cv2.IMREAD_COLOR)
 
             if mat.shape[0] != self.tsize[0] and mat.shape[1] != self.tsize[1]:
@@ -103,7 +108,7 @@ class CustomDataSet(Dataset):
             #cv2.waitKey(0)
             tensor.append(image2tensor(mats[key], mean=self.mean, std=self.std, swap_red_blue=True))
         tensor = np.stack(tensor)
-        return torch.from_numpy(tensor), self.samples[idx][0]
+        return torch.from_numpy(tensor), self.targets[idx]
 
 
 class Speedometer:
