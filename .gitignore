@@ -1,0 +1,16 @@
+__pycache__/
+.idea/*
+.pth
+.idea
+cache
+weights
+wandb
+results
+*.log
+nohup.out
+venv
+runs
+weights
+*.tar
+*.csv
+*.zip
