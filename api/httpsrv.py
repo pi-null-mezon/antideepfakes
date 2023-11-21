@@ -49,7 +49,10 @@ async def lifespan(app: FastAPI):
     global dds
     dds = [
         DD256x60x01([
-            './weights/final/256x60x0.1/tmp_dd_on_effnet_v2_s@256x60x0.1.jit',
+            './weights/final/256x60x0.1/tmp_dd_on_effnet_v2_s@256x60x0.1_v0.jit',
+            './weights/final/256x60x0.1/tmp_dd_on_effnet_v2_s@256x60x0.1_v1.jit',
+            './weights/final/256x60x0.1/tmp_dd_on_resnext50@256x60x0.1_v1.jit',
+            #'./weights/final/256x60x0.1/tmp_dd_on_resnext50@256x60x0.1_v2.jit',
         ], device),
     ]
     if double_res_check:

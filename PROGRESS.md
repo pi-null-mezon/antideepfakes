@@ -57,3 +57,46 @@ NAIVE AVERAGING TEST for seq.length 10 + resnext50.pth:
  - BPCER@0.1: 0.0972
  - BPCER@0.01: 0.4877
  - BPCER@0.001: 0.9770
+
+> 21.11.2023 21:30 (datasets were updated)
+
+FIRST COMMIT VERSION SEQUENCE PROCESSOR TEST for precision: fp16, seq.length: 10 frames
+ - EER: 0.1305 (score: 0.9430)
+ - BPCER@0.1: 0.2299
+ - BPCER@0.01: 0.8684
+ - BPCER@0.001: 0.9674
+
+--- 
+
+NAIVE AVERAGING TEST for precision: fp16, seq.length: 10 frames, effnet_v2_s@256x60x0.1.pth
+ - EER: 0.0359 (score: 0.3540)
+ - BPCER@0.1: 0.0151
+ - BPCER@0.01: 0.1203
+ - BPCER@0.001: 0.9098
+
+SEQUENCE PROCESSOR TEST for precision: fp16, seq.length: 10 frames, encoder@effnet_v2_s@256x60x0.1.jit
+ - EER: 0.0298 (score: 0.3420)
+ - BPCER@0.1: 0.0080
+ - BPCER@0.01: 0.1160
+ - BPCER@0.001: 0.8462
+
+SEQUENCE PROCESSOR TEST for precision: fp16, seq.length: 10 frames, encoder@effnet_v2_s@256x60x0.1.jit
+ - EER: 0.0266 (score: 0.2960)
+ - BPCER@0.1: 0.0071
+ - BPCER@0.01: 0.1004
+ - BPCER@0.001: 0.9172
+
+
+---
+
+SEQUENCE PROCESSOR TEST for precision: fp16, seq.length: 10 frames, encoder@resnext50@256x60x0.1_v1.jit
+ - EER: 0.0703 (score: 0.7650)
+ - BPCER@0.1: 0.0514
+ - BPCER@0.01: 0.3517
+ - BPCER@0.001: 0.7723
+
+SEQUENCE PROCESSOR TEST for precision: fp16, seq.length: 10 frames, encoder@resnext50@256x60x0.1_v2.jit
+- EER: 0.0708 (score: 0.6940)
+ - BPCER@0.1: 0.0473
+ - BPCER@0.01: 0.5973
+ - BPCER@0.001: 0.9476

@@ -47,7 +47,9 @@ class FaceVideoProcessor:
         with torch.no_grad():
             for model in self.sequence_models:
                 prediction = model(sequences)
-                scores.append(prediction.mean(dim=0)[1].item())
+                ls = prediction.mean(dim=0)[1].item()
+                print(ls)
+                scores.append(ls)
         return np.array(scores).mean().item()
 
 

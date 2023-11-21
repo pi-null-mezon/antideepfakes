@@ -3,7 +3,7 @@ from shutil import move
 import os
 from tqdm import tqdm
 
-source_path = '/media/alex/HDD1_2T/Deepfakes/dfdc/train_part_11/dfdc_train_part_11'
+source_path = '/media/alex/HDD1_2T/Deepfakes/dfdc/train_part_33/dfdc_train_part_33'
 
 with open(os.path.join(source_path, 'metadata.json'), 'r') as i_f:
     markup = json.load(i_f)

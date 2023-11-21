@@ -22,8 +22,8 @@ for key in cfg:
     print(f" - {key}: {cfg[key]}")
 
 # --------------------------------
-
-singleshot_model = torch.load(f'./weights/{cfg.backbone_name}@{crop_format}.pth').to(device)
+'''
+singleshot_model = torch.load(f'./weights/{cfg.backbone_name}@{crop_format}_v2.pth').to(device)
 if cfg.backbone_name == "effnet_v2_s":
     singleshot_model.classifier.append(torch.nn.Softmax(dim=1))
 if cfg.check_in_fp16:
@@ -34,7 +34,7 @@ traced_singleshot_model = torch.jit.load(f'./weights/tmp_{cfg.backbone_name}@{cr
 if cfg.check_in_fp16:
     traced_singleshot_model.half()
 traced_singleshot_model.eval()
-
+'''
 sequence_model = torch.jit.load(f'./weights/tmp_dd_on_{cfg.backbone_name}@{crop_format}.jit').to(device)
 if cfg.check_in_fp16:
     sequence_model.half()
@@ -44,8 +44,8 @@ sequence_model.eval()
 
 print("Test dataset:")
 test_dataset = CustomDataSet([
-    f"{local_path}/dfdc/train_part_17",
-    f"{local_path}/dfdc/train_part_41"
+    f"{local_path}/toloka",
+    f"{local_path}/dfdc_test"
 ],
     tsize=cfg.crop_size,
     do_aug=cfg.augment,
@@ -103,5 +103,4 @@ test_sequence_processor(dataloader=test_dataloader, processor=sequence_model,
 
 # test_naive_averaging_singleshot(dataloader=test_dataloader, singleshot=singleshot_model, info=info + f"{cfg.backbone_name}@{crop_format}.pth")
 
-test_naive_averaging_singleshot(dataloader=test_dataloader, singleshot=traced_singleshot_model,
-                                info=info + f"{cfg.backbone_name}@{crop_format}.jit")
+# test_naive_averaging_singleshot(dataloader=test_dataloader, singleshot=traced_singleshot_model, info=info + f"{cfg.backbone_name}@{crop_format}.jit")

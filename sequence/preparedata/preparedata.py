@@ -47,7 +47,7 @@ target_location = f"/home/alex/Fastdata/deepfakes/sequence/{crop_format}"
 procs = list()
 conf = config(dthresh=0.9, strobe=7, tside=crop_size, teyes=iod_dst, vshift=vshift)
 
-dataset_name = 'roop'
+'''dataset_name = 'roop'
 procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/moves/live", f"{target_location}/{dataset_name}/live", True, conf))
 procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/moves/fake", f"{target_location}/{dataset_name}/fake", True, conf))
 procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/nums/live", f"{target_location}/{dataset_name}/live", True, conf))
@@ -91,8 +91,13 @@ procs = list()
 procs.append(spawn("/media/alex/Datastorage/Testdata/Video/distortion_liveness/all/live", f"{target_location}/{dataset_name}/live", True, conf))
 for part in ['17', '23', '41', '43', '47']:
     procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/train_part_{part}/live", f"{target_location}/{dataset_name}/live", True, conf))
-    procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/train_part_{part}/fake", f"{target_location}/{dataset_name}/fake", True, conf))
+    procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/train_part_{part}/fake", f"{target_location}/{dataset_name}/fake", True, conf))'''
 
+
+dataset_name = "dfdc"
+for part in ['13', '33']:
+    procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/train_part_{part}/live", f"{target_location}/{dataset_name}_test/live", True, conf))
+    procs.append(spawn(f"/media/alex/HDD1_2T/Deepfakes/{dataset_name}/train_part_{part}/fake", f"{target_location}/{dataset_name}_test/fake", True, conf))
 
 for proc in procs:
     proc.wait()

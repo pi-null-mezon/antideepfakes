@@ -17,6 +17,8 @@ SystemFailure© solution for challenge'2023
 
 - [sequence++](./sequence++) - tools to learn advanced deepfake detector that analyze sequences of frames
 
+- [test](./test) - final test of trained models before and after tracing
+
 - [API](./api) - API and docker files to build stand-alone service
 
 - [scripts](./scripts) - scripts for the supervisors (to process local folder via API)

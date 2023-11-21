@@ -23,7 +23,7 @@ cfg.train_in_fp16 = True
 cfg.crop_size = (256, 256)
 cfg.batch_size = 32
 cfg.grad_accum_batches = 4
-cfg.num_epochs = 50
+cfg.num_epochs = 32
 cfg.num_classes = 2
 cfg.augment = True
 cfg.model_name = "effnet_v2_s"
@@ -68,7 +68,7 @@ writer = SummaryWriter(filename_suffix=cfg.model_name)
 print("Train dataset:")
 train_dataset = CustomDataSet([
     f"{local_path}/roop",
-    f"{local_path}/toloka",
+    f"{local_path}/FaceForensics++",
     f"{local_path}/Celeb-DF-v2",
     f"{local_path}/dfdc",
 ], cfg.crop_size, do_aug=cfg.augment)
@@ -90,7 +90,7 @@ for key in train_dataset.labels_names():
 
 print("Test dataset:")
 test_dataset = CustomDataSet([
-    f"{local_path}/FaceForensics++",
+    f"{local_path}/toloka"
 ], cfg.crop_size, do_aug=False)
 print(f"  {test_dataset.labels_names()}")
 print(f"  {dict(Counter(test_dataset.targets))}")

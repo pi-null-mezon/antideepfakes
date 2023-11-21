@@ -11,11 +11,11 @@ cfg.sequence_length = 10
 cfg.batch_size = 4
 cfg.num_classes = 2
 cfg.alive_lbl = 1
-cfg.benchmark = True
+cfg.benchmark = False
 cfg.warmup_iters = 5
 cfg.work_iters = 30
 cfg.model_name = "effnet_v2_s"
-cfg.pair_path = 'final/10_0.618'
+cfg.pair_path = '0.310'
 crop_format = '256x60x0.1' if cfg.crop_size[0] == 256 else '224x90x0.2'
 
 for key in cfg:
@@ -23,23 +23,15 @@ for key in cfg:
 
 # ---------- DNN --------------
 
-if cfg.model_name == "effnet_v2_s":
-    singleshot = torchvision.models.efficientnet_v2_s()
-    singleshot.classifier[1] = torch.nn.Identity()
-    weights_path = os.path.join(f'./weights/{cfg.pair_path}/++tmp_{cfg.model_name}@{crop_format}.pth')
-    print(f" - single shot weights: '{weights_path}'")
-    singleshot.load_state_dict(torch.load(weights_path, map_location='cpu').state_dict())
+weights_path = os.path.join(f'./weights/{cfg.pair_path}/++tmp_{cfg.model_name}@{crop_format}.pth')
+print(f" - single shot weights: '{weights_path}'")
+singleshot = torch.load(weights_path, map_location='cpu')
+weights_path = os.path.join(f'./weights/{cfg.pair_path}/++tmp_encoder_{cfg.model_name}@{crop_format}.pth')
+print(f" - encoder weights: '{weights_path}'")
+encoder = torch.load(weights_path, map_location='cpu')
 
-    encoder = EncoderNet(d_model=1280, num_heads=16, num_layers=1, d_ff=128, dropout_l=0.1, dropout=0.1,
-                         num_classes=cfg.num_classes, max_seq_length=cfg.sequence_length)
-    weights_path = os.path.join(f'./weights/{cfg.pair_path}/++tmp_encoder_{cfg.model_name}@{crop_format}.pth')
-    print(f" - encoder weights: '{weights_path}'")
-    encoder.load_state_dict(torch.load(weights_path, map_location='cpu').state_dict())
-
-    model = DeepfakeDetector(singleshot, encoder)
-    model.eval()
-else:
-    raise NotImplementedError
+model = DeepfakeDetector(singleshot, encoder)
+model.eval()
 
 # ----------------------------
 
