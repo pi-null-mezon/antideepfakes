@@ -28,7 +28,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 double_res_check = True if os.getenv("DOUBLE_RES_CHECK", 'False').lower() in ['1', 'true', 'on'] else False
 
-max_sequences = int(os.getenv("MAX_SEQUENCES", 4))
+max_sequences = int(os.getenv("MAX_SEQUENCES", 3))
 assert max_sequences > 0
 
 strobe = int(os.getenv("VIDEO_STROBE", 5))
@@ -36,6 +36,9 @@ assert strobe > 0
 
 fd_isize = int(os.getenv("FACE_DETECTOR_INPUT_SIZE", 150))
 assert fd_isize > 71
+
+min_score_for_live = float(os.getenv("MIN_SCORE_FOR_LIVE", 0.8))
+assert 0.0 < min_score_for_live < 1.0
 
 fd, ld, dds = None, None, None
 
@@ -51,8 +54,7 @@ async def lifespan(app: FastAPI):
         DD256x60x01([
             './weights/final/256x60x0.1/tmp_dd_on_effnet_v2_s@256x60x0.1_v0.jit',
             './weights/final/256x60x0.1/tmp_dd_on_effnet_v2_s@256x60x0.1_v1.jit',
-            './weights/final/256x60x0.1/tmp_dd_on_resnext50@256x60x0.1_v1.jit',
-            #'./weights/final/256x60x0.1/tmp_dd_on_resnext50@256x60x0.1_v2.jit',
+            './weights/final/256x60x0.1/tmp_dd_on_resnext50@256x60x0.1.jit',
         ], device),
     ]
     if double_res_check:
@@ -70,7 +72,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="SystemFailure's Deepfake Detection HTTP service",
     description="Сервис проверки подлинности видеозаписей лица",
-    version="1.0.0",
+    version="2.0.0",
     openapi_tags=[{"name": "ЕБС"}],
     lifespan=lifespan,
     root_path=fastapi_root_path
@@ -204,7 +206,7 @@ async def process(request: Request,
         error = 'face not found'
         return JSONResponse(status_code=EBS[error]['http'],
                             content={"code": EBS[error]['code'], "message": EBS[error]['message']})
-    return {"score": score, "passed": bool(score > 0.5)}
+    return {"score": score, "passed": bool(score > min_score_for_live)}
 
 
 @app.get(f"{prefix}/detect",
@@ -242,4 +244,5 @@ if __name__ == '__main__':
     print(f"  - face detector input size: {fd_isize}", flush=True)
     print(f"  - double resolutions check: {double_res_check}", flush=True)
     print(f"  - inference device: '{device}'", flush=True)
+    print(f"  - min score for live: {min_score_for_live:.3f}", flush=True)
     uvicorn.run('httpsrv:app', host=http_srv_addr, port=http_srv_port, workers=workers)

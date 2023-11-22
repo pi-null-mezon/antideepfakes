@@ -86,6 +86,11 @@ SEQUENCE PROCESSOR TEST for precision: fp16, seq.length: 10 frames, encoder@effn
  - BPCER@0.01: 0.1004
  - BPCER@0.001: 0.9172
 
+SEQUENCE PROCESSOR TEST for precision: fp16, seq.length: 10 frames, encoder@effnet_v2_s@256x60x0.1.jit
+ - EER: 0.0275 (score: 0.4130)
+ - BPCER@0.1: 0.0069
+ - BPCER@0.01: 0.0928
+ - BPCER@0.001: 0.8758
 
 ---
 
@@ -96,7 +101,13 @@ SEQUENCE PROCESSOR TEST for precision: fp16, seq.length: 10 frames, encoder@resn
  - BPCER@0.001: 0.7723
 
 SEQUENCE PROCESSOR TEST for precision: fp16, seq.length: 10 frames, encoder@resnext50@256x60x0.1_v2.jit
-- EER: 0.0708 (score: 0.6940)
+ - EER: 0.0708 (score: 0.6940)
  - BPCER@0.1: 0.0473
  - BPCER@0.01: 0.5973
  - BPCER@0.001: 0.9476
+
+SEQUENCE PROCESSOR TEST for precision: fp16, seq.length: 10 frames, encoder@resnext50@256x60x0.1.jit
+ - EER: 0.0547 (score: 0.6320)
+ - BPCER@0.1: 0.0343
+ - BPCER@0.01: 0.1300
+ - BPCER@0.001: 0.7339

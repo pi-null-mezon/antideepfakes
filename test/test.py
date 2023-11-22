@@ -11,7 +11,7 @@ cfg.crop_size = (256, 256)
 cfg.sequence_length = 10  # samples to be selected per sequence
 cfg.batch_size = 32  # sequences to be selected in minibatch
 cfg.augment = False
-cfg.backbone_name = "effnet_v2_s"
+cfg.backbone_name = "resnext50"
 crop_format = '256x60x0.1' if cfg.crop_size[0] == 256 else '224x90x0.2'
 local_path = f"/home/alex/Fastdata/deepfakes/sequence/{crop_format}"
 

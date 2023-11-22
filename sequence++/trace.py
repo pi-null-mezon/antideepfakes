@@ -14,8 +14,8 @@ cfg.alive_lbl = 1
 cfg.benchmark = False
 cfg.warmup_iters = 5
 cfg.work_iters = 30
-cfg.model_name = "effnet_v2_s"
-cfg.pair_path = '0.310'
+cfg.model_name = "resnext50"
+cfg.pair_path = 'katia_3'
 crop_format = '256x60x0.1' if cfg.crop_size[0] == 256 else '224x90x0.2'
 
 for key in cfg:

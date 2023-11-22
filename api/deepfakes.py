@@ -48,9 +48,8 @@ class FaceVideoProcessor:
             for model in self.sequence_models:
                 prediction = model(sequences)
                 ls = prediction.mean(dim=0)[1].item()
-                print(ls)
                 scores.append(ls)
-        return np.array(scores).mean().item()
+        return (np.array(scores).mean().item() + np.array(scores).min().item()) / 2
 
 
 class AlignedCropsProcessor(FaceVideoProcessor):
