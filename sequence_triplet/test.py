@@ -35,7 +35,8 @@ print(f"  {dict(Counter(train_dataset.targets))}")
 dataloaders['train'] = torch.utils.data.DataLoader(train_dataset, batch_size=cfg.batch_size, shuffle=True,
                                               drop_last=False, num_workers=16)
 
-print("val dataset:")
+
+print("Celeb dataset:")
 val_dataset = CustomDataSet([
     f"{local_path}/Celeb-DF-v2"
 ],
@@ -46,7 +47,9 @@ print(f"  {val_dataset.labels_names()}")
 print(f"  {dict(Counter(val_dataset.targets))}")
 dataloaders['Celeb-DF-v2'] = torch.utils.data.DataLoader(val_dataset, batch_size=cfg.batch_size, shuffle=True,
                                               drop_last=False, num_workers=16)
-print("Test dataset:")
+
+
+print("Toloka dataset:")
 test_dataset = CustomDataSet([
     f"{local_path}/toloka"
 ],
@@ -58,19 +61,48 @@ print(f"  {dict(Counter(test_dataset.targets))}")
 dataloaders['toloka'] = torch.utils.data.DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=True,
                                               drop_last=False, num_workers=16)
 
-print("Test1 dataset:")
+
+print("Toloka_enh dataset:")
 test1_dataset = CustomDataSet([
     f"{local_path}/toloka_enh"
 ],
     tsize=cfg.crop_size,
     do_aug=False,
     min_sequence_length=cfg.sequence_length)
-print(f"  {test_dataset.labels_names()}")
+print(f"  {test1_dataset.labels_names()}")
 print(f"  {dict(Counter(test1_dataset.targets))}")
 dataloaders['toloka_enh'] = torch.utils.data.DataLoader(test1_dataset, batch_size=cfg.batch_size, shuffle=True,
                                               drop_last=False, num_workers=16)
 
 
+print("DFDC test dataset:")
+test2_dataset = CustomDataSet([
+    f"{local_path}/dfdc_test"
+],
+    tsize=cfg.crop_size,
+    do_aug=False,
+    min_sequence_length=cfg.sequence_length)
+print(f"  {test2_dataset.labels_names()}")
+print(f"  {dict(Counter(test2_dataset.targets))}")
+dataloaders['dfdc_test'] = torch.utils.data.DataLoader(test2_dataset, batch_size=cfg.batch_size, shuffle=True,
+                                              drop_last=False, num_workers=16)
+
+
+print("All datases:")
+all_dataset = CustomDataSet([
+    f"{local_path}/Celeb-DF-v2",
+    f"{local_path}/toloka",
+    f"{local_path}/toloka_enh",
+    f"{local_path}/dfdc_test",
+
+],
+    tsize=cfg.crop_size,
+    do_aug=False,
+    min_sequence_length=cfg.sequence_length)
+print(f"  {all_dataset.labels_names()}")
+print(f"  {dict(Counter(all_dataset.targets))}")
+dataloaders['all'] = torch.utils.data.DataLoader(all_dataset, batch_size=cfg.batch_size, shuffle=True,
+                                              drop_last=False, num_workers=6)
 
 
 def test(epoch, dataloader, mode, backbone, model, alive_lbl=1):
@@ -102,7 +134,8 @@ for w in w_e:
     model.to(device)
     backbone = torch.load(f'weights/{w.replace("encoder_", "")}')
     backbone.to(device)
-    for data, dataloader in dataloaders.items():
+    for data in ['toloka_enh', 'dfdc_test']:#dataloaders.items():
+        dataloader = dataloaders[data]
         eer = test(0, dataloader, mode='data', backbone=backbone, model=model)
         metrics.loc[w, data] = eer
 

@@ -16,7 +16,6 @@ import resnet
 import loss
 from dataset import CustomDataSet, CustomTripletDataSet
 
-
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # --------- CONFIG -----------
@@ -37,7 +36,7 @@ cfg.labels_smoothing = 0.1
 cfg.max_batches_per_train_epoch = 512 #- use all batches
 cfg.triplet_coef = 0.1#1
 cfg.ce_coef = 1#0
-cfg.triplet_src = 'custom' #'torch'
+cfg.triplet_src = 'custom' #'torch'#
 crop_format = '256x60x0.1' if cfg.crop_size[0] == 256 else '224x90x0.2'
 local_path = f'../sequence/{crop_format}'
 
@@ -96,7 +95,8 @@ writer = SummaryWriter(filename_suffix=f'{crop_format}@sequence++')
 
 print("Train dataset:")
 train_dataset = CustomTripletDataSet([f'{local_path}/FaceForensics++',
-                                      f'{local_path}/roop'
+                                      f'{local_path}/roop',
+                                      f'{local_path}/dfdc'
                                       ],
                                      tsize=cfg.crop_size,
                                      do_aug=cfg.augment,
@@ -110,7 +110,11 @@ alive_lbl = 1
 
 print("val dataset:")
 val_dataset = CustomDataSet([
-    f"{local_path}/Celeb-DF-v2"
+    f"{local_path}/Celeb-DF-v2",
+    f"{local_path}/toloka",
+    f"{local_path}/toloka_enh",
+    f"{local_path}/dfdc_test",
+
 ],
     tsize=cfg.crop_size,
     do_aug=False,
@@ -119,17 +123,7 @@ print(f"  {val_dataset.labels_names()}")
 print(f"  {dict(Counter(val_dataset.targets))}")
 val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=cfg.batch_size, shuffle=True,
                                               drop_last=False, num_workers=6)
-print("Test dataset:")
-test_dataset = CustomDataSet([
-    f"{local_path}/toloka_enh"
-],
-    tsize=cfg.crop_size,
-    do_aug=False,
-    min_sequence_length=cfg.sequence_length)
-print(f"  {test_dataset.labels_names()}")
-print(f"  {dict(Counter(test_dataset.targets))}")
-test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=True,
-                                              drop_last=False, num_workers=6)
+
 
 metrics = {
     'train': {'EER': float('inf'), 'loss': float('inf'), 'BPCER@0.01': float('inf')},
@@ -153,8 +147,8 @@ def update_metrics(mode, epoch, running_loss, roc_estimator):
     if eer < metrics[mode]['EER']:
         metrics[mode]['EER'] = eer
         if mode == 'val':
-            torch.save(model, f"./weights/++tmp_encoder_{cfg.backbone_name}@{crop_format}_{mode}_{round(metrics[mode]['EER'], 2)}_tr{cfg.triplet_coef}_ce{cfg.ce_coef}.pth")
-            torch.save(backbone, f"./weights/++tmp_{cfg.backbone_name}@{crop_format}_{mode}_{round(metrics[mode]['EER'], 2)}_tr{cfg.triplet_coef}_ce{cfg.ce_coef}.pth")
+            torch.save(model, f"./weights/++tmp_encoder_{cfg.backbone_name}@{crop_format}_{mode}_{round(metrics[mode]['EER'], 2)}_tr{cfg.triplet_coef}_ce{cfg.ce_coef}_{cfg.triplet_src}.pth")
+            torch.save(backbone, f"./weights/++tmp_{cfg.backbone_name}@{crop_format}_{mode}_{round(metrics[mode]['EER'], 2)}_tr{cfg.triplet_coef}_ce{cfg.ce_coef}_{cfg.triplet_src}.pth")
         print(f" - EER: {eer:.4f} (score: {err_s:.3f}) - improvement")
     else:
         print(f" - EER: {eer:.4f} (score: {err_s:.3f})")
@@ -303,9 +297,9 @@ def test_naive_averaging(dataloader):
 
 
 if __name__ == '__main__':
-    test_naive_averaging(test_dataloader)
+    test_naive_averaging(val_dataloader)
     for epoch in range(cfg.num_epochs):
         train(epoch, train_dataloader)
-        test(epoch, val_dataloader,'val')
-        if (epoch + 1) % 5 == 0:
-            test(epoch, test_dataloader, 'test')
+        test(epoch, val_dataloader, 'val')
+        train_dataloader.dataset.generate_triplets()
+

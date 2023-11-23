@@ -155,7 +155,20 @@ class CustomTripletDataSet(Dataset):
             fakes_seqs = os.listdir(fakes_path)
             lives_path = os.path.join(path, 'live')
             lives_seqs = os.listdir(lives_path)
+            print(path, len(fakes_seqs), len(lives_seqs))
             live_id2folder = dict((x.split('_')[0] if '_' in x else x.split('-@-')[0], x) for x in lives_seqs)
+            if path.endswith('dfdc'):
+                for i in range(2000):
+                    if random.random() > 0.5:
+                        anch, pos = random.sample(lives_seqs, 2)
+                        neg = random.choice(fakes_seqs)
+                        triplets.append((anch, pos, neg, 1, j))
+                    else:
+                        anch, pos = random.sample(fakes_seqs, 2)
+                        neg = random.choice(lives_seqs)
+                        triplets.append((anch, pos, neg, 0, j))
+                continue
+                
             if not self.balanced:
                 #TODO fix triplets generation for roop 
                 t_s = list(map(lambda x: x.split('-@-')[0], fakes_seqs))        
@@ -186,10 +199,11 @@ class CustomTripletDataSet(Dataset):
 
         anch, pos, neg, anch_cls, path_id = self.triplets[idx]
         path = self.paths[path_id]
+
         anch_seq = self.load_seq(anch, anch_cls, path)
         pos_seq = self.load_seq(pos, anch_cls, path)
         neg_seq = self.load_seq(neg, 1 - anch_cls, path)
-
+        
         return anch_seq, pos_seq, neg_seq, anch_cls
 
     def load_seq(self, folder, label, path):
